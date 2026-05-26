@@ -1,0 +1,21 @@
+Ticker,Clase,Cantidad,Valor_Base_Fijo,Moneda
+IONQ,Acciones EEUU,53.40812,0.0,USD
+GOOG,Acciones EEUU,36.1929,0.0,USD
+UNH,Acciones EEUU,23.83395,0.0,USD
+V,Acciones EEUU,9.10111,0.0,USD
+MSFT,Acciones EEUU,10.84953,0.0,USD
+GLD,Commodities (Oro),48.53481,0.0,USD
+CIBEST,Acciones Colombia,360.0,71600.0,COP
+GRUPOARGOS,Acciones Colombia,31.0,13660.0,COP
+PFGRUPOARG,Acciones Colombia,2199.0,11500.0,COP
+GXTESCOL,Acciones Colombia,88.0,53250.0,COP
+PEI,Acciones Colombia,388.0,62000.0,COP
+BTC,Criptomonedas,0.13078689,0.0,USD
+ETH,Criptomonedas,0.57562952,0.0,USD
+ADA,Criptomonedas,765.10032522,0.0,USD
+XRP,Criptomonedas,82.24143446,0.0,USD
+Apto Avenida Park,Propiedad Raíz,1.0,950000000.0,COP
+Apto Mediterranea,Propiedad Raíz,1.0,360000000.0,COP
+Broker EEUU,Liquidez USD,1.0,10000.0,USD
+Disponible Broker Col,Liquidez COP,1.0,46506461.0,COP
+Fiducuenta Bancolombia,Fondos de Inversión,1.0,1364514861.0,COP

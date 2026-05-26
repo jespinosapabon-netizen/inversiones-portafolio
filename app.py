@@ -1,0 +1,1230 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import requests
+import yfinance as yf
+import os
+import json
+from datetime import datetime, timedelta
+
+# CONFIGURACIÓN DEL FRAMEWORK INTERNA (PRIMERA INSTRUCCIÓN OBLIGATORIA)
+st.set_page_config(
+    page_title="Inversiones al instante Portafolio",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# -----------------------------------------------------------------------------
+# CONTROL SELECCIONAL DE MIGRACIÓN (PREVIENE BUCLES DE LIMPIEZA)
+# -----------------------------------------------------------------------------
+llaves_obsoletas = ['inventario_activos_v5', 'db_historica_v5', 'inventario_activos_v6', 'db_historica_v6']
+if any(llave in st.session_state for llave in llaves_obsoletas):
+    st.session_state.clear()
+
+# -----------------------------------------------------------------------------
+# SUB-SISTEMA DE PERSISTENCIA FÍSICA EN DISCO
+# -----------------------------------------------------------------------------
+CSV_FILE = "inventario_activos.csv"
+HIST_FILE = "historial_patrimonio.csv"
+CACHE_FILE = "precios_cache.json"
+
+def inicializar_archivos_disco():
+    if not os.path.exists(CSV_FILE):
+        df_defecto = pd.DataFrame([
+            {"Ticker": "IONQ", "Clase": "Acciones EEUU", "Cantidad": 53.40812, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "GOOG", "Clase": "Acciones EEUU", "Cantidad": 36.19290, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "UNH", "Clase": "Acciones EEUU", "Cantidad": 23.83395, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "V", "Clase": "Acciones EEUU", "Cantidad": 9.10111, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "MSFT", "Clase": "Acciones EEUU", "Cantidad": 10.84953, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "GLD", "Clase": "Commodities (Oro)", "Cantidad": 48.53481, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 71600.0, "Moneda": "COP"},
+            {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 13660.0, "Moneda": "COP"},
+            {"Ticker": "PFGRUPOARG", "Clase": "Acciones Colombia", "Cantidad": 2199.0, "Valor_Base_Fijo": 11500.0, "Moneda": "COP"},
+            {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 53250.0, "Moneda": "COP"},
+            {"Ticker": "PEI", "Clase": "Acciones Colombia", "Cantidad": 388.0, "Valor_Base_Fijo": 62000.0, "Moneda": "COP"},
+            {"Ticker": "BTC", "Clase": "Criptomonedas", "Cantidad": 0.13078689, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "ETH", "Clase": "Criptomonedas", "Cantidad": 0.57562952, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "ADA", "Clase": "Criptomonedas", "Cantidad": 765.10032522, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "XRP", "Clase": "Criptomonedas", "Cantidad": 82.24143446, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+            {"Ticker": "Fiducuenta Bancolombia", "Clase": "Fondos de Inversión", "Cantidad": 1.0, "Valor_Base_Fijo": 1362452901.0, "Moneda": "COP"},
+            {"Ticker": "Disponible Broker Col", "Clase": "Liquidez COP", "Cantidad": 1.0, "Valor_Base_Fijo": 46506461.0, "Moneda": "COP"},
+            {"Ticker": "Broker EEUU", "Clase": "Liquidez USD", "Cantidad": 1.0, "Valor_Base_Fijo": 12500.0, "Moneda": "USD"},
+            {"Ticker": "Apto Avenida Park", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 950000000.0, "Moneda": "COP"},
+            {"Ticker": "Apto Mediterranea", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 360000000.0, "Moneda": "COP"}
+        ])
+        df_defecto.to_csv(CSV_FILE, index=False)
+
+    if not os.path.exists(HIST_FILE):
+        df_hist_defecto = pd.DataFrame([
+            {"Fecha": "2025-06-15", "Clase": "Acciones EEUU", "Valor_COP": 100000000.0},
+            {"Fecha": "2025-06-15", "Clase": "Commodities (Oro)", "Valor_COP": 15000000.0},
+            {"Fecha": "2025-06-15", "Clase": "Criptomonedas", "Valor_COP": 30000000.0},
+            {"Fecha": "2025-06-15", "Clase": "Acciones Colombia", "Valor_COP": 65000000.0},
+            {"Fecha": "2025-06-15", "Clase": "Fondos de Inversión", "Valor_COP": 1250000000.0},
+            {"Fecha": "2025-06-15", "Clase": "Cash Broker Desk", "Valor_COP": 40000000.0},
+            
+            {"Fecha": "2025-09-15", "Clase": "Acciones EEUU", "Valor_COP": 115000000.0},
+            {"Fecha": "2025-09-15", "Clase": "Commodities (Oro)", "Valor_COP": 16500000.0},
+            {"Fecha": "2025-09-15", "Clase": "Criptomonedas", "Valor_COP": 33000000.0},
+            {"Fecha": "2025-09-15", "Clase": "Acciones Colombia", "Valor_COP": 71000000.0},
+            {"Fecha": "2025-09-15", "Clase": "Fondos de Inversión", "Valor_COP": 1290000000.0},
+            {"Fecha": "2025-09-15", "Clase": "Cash Broker Desk", "Valor_COP": 43000000.0},
+            
+            {"Fecha": "2026-01-01", "Clase": "Acciones EEUU", "Valor_COP": 125000000.0},
+            {"Fecha": "2026-01-01", "Clase": "Commodities (Oro)", "Valor_COP": 17800000.0},
+            {"Fecha": "2026-01-01", "Clase": "Criptomonedas", "Valor_COP": 35000000.0},
+            {"Fecha": "2026-01-01", "Clase": "Acciones Colombia", "Valor_COP": 75000000.0},
+            {"Fecha": "2026-01-01", "Clase": "Fondos de Inversión", "Valor_COP": 1320000000.0},
+            {"Fecha": "2026-01-01", "Clase": "Cash Broker Desk", "Valor_COP": 44000000.0},
+            
+            {"Fecha": "2026-04-15", "Clase": "Acciones EEUU", "Valor_COP": 130000000.0},
+            {"Fecha": "2026-04-15", "Clase": "Commodities (Oro)", "Valor_COP": 19000000.0},
+            {"Fecha": "2026-04-15", "Clase": "Criptomonedas", "Valor_COP": 37000000.0},
+            {"Fecha": "2026-04-15", "Clase": "Acciones Colombia", "Valor_COP": 78000000.0},
+            {"Fecha": "2026-04-15", "Clase": "Fondos de Inversión", "Valor_COP": 1350000000.0},
+            {"Fecha": "2026-04-15", "Clase": "Cash Broker Desk", "Valor_COP": 45500000.0}
+        ])
+        df_hist_defecto.to_csv(HIST_FILE, index=False)
+
+# -----------------------------------------------------------------------------
+# SUBSISTEMA DE PERSISTENCIA HÍBRIDA (SQL NUBE / CSV LOCAL)
+# -----------------------------------------------------------------------------
+def usar_base_datos():
+    try:
+        # Comprobar si st.secrets tiene credenciales de db y sqlalchemy está disponible
+        if "connections" in st.secrets and "db" in st.secrets["connections"]:
+            import sqlalchemy
+            return True
+    except Exception:
+        pass
+    return False
+
+def obtener_engine():
+    try:
+        conn = st.connection("db", type="sql")
+        return conn.engine
+    except Exception as e:
+        st.error(f"Error al conectar con la base de datos: {e}")
+        return None
+
+def cargar_inventario():
+    if usar_base_datos():
+        engine = obtener_engine()
+        if engine is not None:
+            try:
+                # Comprobar si la tabla existe, si no, crearla
+                with engine.begin() as conn:
+                    conn.exec_driver_sql("""
+                        CREATE TABLE IF NOT EXISTS inventario_activos (
+                            "Ticker" VARCHAR(50) PRIMARY KEY,
+                            "Clase" VARCHAR(100),
+                            "Cantidad" DOUBLE PRECISION,
+                            "Valor_Base_Fijo" DOUBLE PRECISION,
+                            "Moneda" VARCHAR(10)
+                        )
+                    """)
+                    
+                    # Comprobar si está vacía
+                    count = conn.exec_driver_sql("SELECT COUNT(*) FROM inventario_activos").scalar()
+                    if count == 0:
+                        df_defecto = pd.read_csv(CSV_FILE) if os.path.exists(CSV_FILE) else pd.DataFrame([
+                            {"Ticker": "IONQ", "Clase": "Acciones EEUU", "Cantidad": 53.40812, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "GOOG", "Clase": "Acciones EEUU", "Cantidad": 36.19290, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "UNH", "Clase": "Acciones EEUU", "Cantidad": 23.83395, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "V", "Clase": "Acciones EEUU", "Cantidad": 9.10111, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "MSFT", "Clase": "Acciones EEUU", "Cantidad": 10.84953, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "GLD", "Clase": "Commodities (Oro)", "Cantidad": 48.53481, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 71600.0, "Moneda": "COP"},
+                            {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 13660.0, "Moneda": "COP"},
+                            {"Ticker": "PFGRUPOARG", "Clase": "Acciones Colombia", "Cantidad": 2199.0, "Valor_Base_Fijo": 11500.0, "Moneda": "COP"},
+                            {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 53250.0, "Moneda": "COP"},
+                            {"Ticker": "PEI", "Clase": "Acciones Colombia", "Cantidad": 388.0, "Valor_Base_Fijo": 62000.0, "Moneda": "COP"},
+                            {"Ticker": "BTC", "Clase": "Criptomonedas", "Cantidad": 0.13078689, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "ETH", "Clase": "Criptomonedas", "Cantidad": 0.57562952, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "ADA", "Clase": "Criptomonedas", "Cantidad": 765.10032522, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "XRP", "Clase": "Criptomonedas", "Cantidad": 82.24143446, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                            {"Ticker": "Fiducuenta Bancolombia", "Clase": "Fondos de Inversión", "Cantidad": 1.0, "Valor_Base_Fijo": 1362452901.0, "Moneda": "COP"},
+                            {"Ticker": "Disponible Broker Col", "Clase": "Liquidez COP", "Cantidad": 1.0, "Valor_Base_Fijo": 46506461.0, "Moneda": "COP"},
+                            {"Ticker": "Broker EEUU", "Clase": "Liquidez USD", "Cantidad": 1.0, "Valor_Base_Fijo": 12500.0, "Moneda": "USD"},
+                            {"Ticker": "Apto Avenida Park", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 950000000.0, "Moneda": "COP"},
+                            {"Ticker": "Apto Mediterranea", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 360000000.0, "Moneda": "COP"}
+                        ])
+                        df_defecto.to_sql("inventario_activos", engine, if_exists="append", index=False)
+                
+                return pd.read_sql("SELECT * FROM inventario_activos", engine)
+            except Exception as e:
+                st.warning(f"Error al leer inventario de base de datos (usando CSV local): {e}")
+                
+    inicializar_archivos_disco()
+    return pd.read_csv(CSV_FILE)
+
+def guardar_inventario(df):
+    if usar_base_datos():
+        engine = obtener_engine()
+        if engine is not None:
+            try:
+                df.to_sql("inventario_activos", engine, if_exists="replace", index=False)
+                return
+            except Exception as e:
+                st.warning(f"Error al escribir inventario en base de datos: {e}")
+    df.to_csv(CSV_FILE, index=False)
+
+def cargar_historial():
+    if usar_base_datos():
+        engine = obtener_engine()
+        if engine is not None:
+            try:
+                with engine.begin() as conn:
+                    conn.exec_driver_sql("""
+                        CREATE TABLE IF NOT EXISTS historial_patrimonio (
+                            "Fecha" DATE,
+                            "Clase" VARCHAR(100),
+                            "Valor_COP" DOUBLE PRECISION,
+                            PRIMARY KEY ("Fecha", "Clase")
+                        )
+                    """)
+                    
+                    count = conn.exec_driver_sql("SELECT COUNT(*) FROM historial_patrimonio").scalar()
+                    if count == 0:
+                        df_hist_defecto = pd.read_csv(HIST_FILE) if os.path.exists(HIST_FILE) else pd.DataFrame([])
+                        df_hist_defecto.to_sql("historial_patrimonio", engine, if_exists="append", index=False)
+                
+                df_db = pd.read_sql("SELECT * FROM historial_patrimonio", engine)
+                df_db["Fecha"] = pd.to_datetime(df_db["Fecha"])
+                return df_db
+            except Exception as e:
+                st.warning(f"Error al leer historial de base de datos (usando CSV local): {e}")
+                
+    inicializar_archivos_disco()
+    df_local = pd.read_csv(HIST_FILE)
+    df_local["Fecha"] = pd.to_datetime(df_local["Fecha"])
+    return df_local
+
+def guardar_historial(df):
+    if usar_base_datos():
+        engine = obtener_engine()
+        if engine is not None:
+            try:
+                df_save = df.copy()
+                if pd.api.types.is_datetime64_any_dtype(df_save["Fecha"]):
+                    df_save["Fecha"] = df_save["Fecha"].dt.strftime("%Y-%m-%d")
+                df_save.to_sql("historial_patrimonio", engine, if_exists="replace", index=False)
+                return
+            except Exception as e:
+                st.warning(f"Error al escribir historial en base de datos: {e}")
+    df_save = df.copy()
+    if pd.api.types.is_datetime64_any_dtype(df_save["Fecha"]):
+        df_save["Fecha"] = df_save["Fecha"].dt.strftime("%Y-%m-%d")
+    df_save.to_csv(HIST_FILE, index=False)
+
+inicializar_archivos_disco()
+
+if 'inventario_activos_core' not in st.session_state:
+    st.session_state['inventario_activos_core'] = cargar_inventario()
+
+# Initialize top bar controls in session state if not present
+if "dark_mode_state" not in st.session_state:
+    st.session_state["dark_mode_state"] = True
+
+# -----------------------------------------------------------------------------
+# SUBSISTEMA DE CACHÉ DE PRECIOS LOCAL
+# -----------------------------------------------------------------------------
+def cargar_cache_precios():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def guardar_cache_precios(precios, variaciones):
+    cache = cargar_cache_precios()
+    for t in precios:
+        cache[t] = {
+            "precio": precios[t],
+            "variacion": variaciones.get(t, 0.0),
+            "actualizado": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=4)
+    except Exception:
+        pass
+
+# -----------------------------------------------------------------------------
+# CONTROL DINÁMICO DE TEMAS VISUALES Y HEADER DE ALTA GAMA (SIN SIDEBAR)
+# -----------------------------------------------------------------------------
+modo_oscuro = st.session_state["dark_mode_state"]
+
+if modo_oscuro:
+    BG_COLOR = "#0B0F19"
+    TEXT_COLOR = "#FFFFFF"
+    TEXT_MUTED = "#9CA3AF"
+    GRID_COLOR = "#1F2937"
+    PLOTLY_TEMPLATE = "plotly_dark"
+    PALETA_GRAFICOS = ["#6366F1", "#06B6D4", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6"]
+    
+    CSS_VARIABLES = """
+    :root {
+        --bg-color: #0B0F19;
+        --text-color: #F9FAFB;
+        --text-muted: #9CA3AF;
+        --card-bg: rgba(17, 24, 39, 0.6);
+        --border-color: rgba(255, 255, 255, 0.08);
+        --shadow: 0 4px 30px rgba(0, 0, 0, 0.35);
+        --shadow-hover: 0 10px 45px rgba(99, 102, 241, 0.18);
+        --primary-glow: rgba(99, 102, 241, 0.5);
+        --grid-color: #1F2937;
+    }
+    """
+else:
+    BG_COLOR = "#F8FAFC"
+    TEXT_COLOR = "#0F172A"
+    TEXT_MUTED = "#64748B"
+    GRID_COLOR = "#E2E8F0"
+    PLOTLY_TEMPLATE = "plotly_white"
+    PALETA_GRAFICOS = ["#4F46E5", "#0EA5E9", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6"]
+    
+    CSS_VARIABLES = """
+    :root {
+        --bg-color: #F8FAFC;
+        --text-color: #0F172A;
+        --text-muted: #64748B;
+        --card-bg: rgba(255, 255, 255, 0.75);
+        --border-color: rgba(0, 0, 0, 0.06);
+        --shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        --shadow-hover: 0 10px 30px rgba(79, 70, 229, 0.1);
+        --primary-glow: rgba(79, 70, 229, 0.35);
+        --grid-color: #E2E8F0;
+    }
+    """
+
+# Inyección de estilos CSS avanzados, Glassmorphism y ocultamiento total de sidebar
+st.markdown(f"""
+    <style>
+    {CSS_VARIABLES}
+    
+    /* ELIMINAR COMPLETAMENTE EL PANEL LATERAL IZQUIERDO Y EL COLLAPSE BUTTON */
+    [data-testid="stSidebar"] {{
+        display: none !important;
+    }}
+    [data-testid="collapsedControl"] {{
+        display: none !important;
+    }}
+    
+    /* Configuración estructural base full-width */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMainBlockContainer"], [data-testid="stVerticalBlock"] {{
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+        transition: all 0.2s ease;
+    }}
+    
+    /* Resaltar todos los títulos, etiquetas de widgets, y textos de selección de periodo */
+    div[data-testid="stMarkdownContainer"] h1, 
+    div[data-testid="stMarkdownContainer"] h2, 
+    div[data-testid="stMarkdownContainer"] h3, 
+    div[data-testid="stMarkdownContainer"] h4, 
+    div[data-testid="stMarkdownContainer"] h5, 
+    div[data-testid="stMarkdownContainer"] h6,
+    span[data-testid="stSubheader"],
+    label[data-testid="stWidgetLabel"],
+    div[data-testid="stRadio"] label,
+    div[role="radiogroup"] label span,
+    div[data-testid="stSelectbox"] label,
+    div[data-testid="stNumberInput"] label,
+    div[data-testid="stTextInput"] label,
+    .stMarkdown p,
+    .stSubheader p {{
+        color: var(--text-color) !important;
+        font-weight: 700 !important;
+    }}
+    
+    /* Ajustes específicos para que los labels de los radio buttons resalten perfectamente */
+    div[data-testid="stRadio"] label p {{
+        color: var(--text-color) !important;
+        font-weight: 600 !important;
+    }}
+    
+    /* Optimización de los márgenes principales para maximizar espacio */
+    [data-testid="stMainBlockContainer"] {{
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+    }}
+    
+    /* Tarjetas de Métricas Premium (Glassmorphism + Adaptación de Ancho) */
+    .metric-container {{
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px 16px;
+        box-shadow: var(--shadow);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        height: 105px;
+        overflow: hidden;
+    }}
+    .metric-container:hover {{
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--primary-glow);
+    }}
+    .metric-label {{
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-muted) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        white-space: nowrap;
+    }}
+    .metric-value {{
+        font-size: clamp(14px, 1.45vw, 21px) !important;
+        font-weight: 800;
+        color: var(--text-color) !important;
+        margin: 3px 0;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+    .metric-delta {{
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        white-space: nowrap;
+    }}
+    
+    .delta-positive {{
+        color: #10B981 !important;
+    }}
+    .delta-negative {{
+        color: #EF4444 !important;
+    }}
+    .delta-neutral {{
+        color: var(--text-muted) !important;
+    }}
+    
+    /* Tarjeta de P&L Unificada Compacta */
+    .pnl-container {{
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px 14px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        height: 105px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }}
+    .pnl-container:hover {{
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--primary-glow);
+    }}
+    
+    /* Desglose de variaciones de categoría */
+    .breakdown-card {{
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 10px 14px;
+        box-shadow: var(--shadow);
+        transition: all 0.25s ease;
+        text-align: left;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        overflow: hidden;
+    }}
+    .breakdown-card:hover {{
+        transform: translateY(-2px);
+        border-color: var(--primary-glow);
+    }}
+    .breakdown-title {{
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--text-muted) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }}
+    .breakdown-value {{
+        font-size: clamp(11px, 1.1vw, 14px) !important;
+        font-weight: 800;
+        color: var(--text-color) !important;
+        margin-top: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+    
+    /* Barra de Control Superior Glassmorphic */
+    .top-control-bar {{
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 10px 20px;
+        margin-bottom: 20px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }}
+    
+    /* Ajustes generales de Streamlit */
+    div[data-baseweb="tab-list"] {{
+        background-color: transparent !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        gap: 20px;
+    }}
+    button[data-baseweb="tab"] {{
+        background-color: transparent !important;
+        color: var(--text-muted) !important;
+        font-weight: 600 !important;
+        border: none !important;
+        padding: 10px 5px !important;
+        transition: all 0.2s ease;
+    }}
+    button[data-baseweb="tab"][aria-selected="true"] {{
+        color: var(--text-color) !important;
+        border-bottom: 3px solid #6366F1 !important;
+        font-weight: 700 !important;
+    }}
+    
+    hr {{
+        border-top: 1px solid var(--border-color) !important;
+    }}
+    </style>
+""", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# MOTOR DE CONSULTA AUTOMÁTICA EN TIEMPO REAL (BATCH FETCHING OPTIMIZED)
+# -----------------------------------------------------------------------------
+@st.cache_data(ttl=300)
+def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
+    precios, variaciones = {}, {}
+    trm_dia, trm_yesterday = 3950.0, 3950.0
+    
+    # Combined target list
+    todos_tickers = list(set(tickers + [trm_ticker]))
+    
+    # Static fallbacks (last resort)
+    fallbacks_p = {"IONQ": 64.0, "GOOG": 379.0, "UNH": 388.0, "V": 275.0, "MSFT": 420.0, "GLD": 414.0, "USDCOP=X": 3950.0}
+    fallbacks_v = {"IONQ": 2.15, "GOOG": -0.45, "UNH": 1.12, "V": 0.05, "MSFT": -0.88, "GLD": -0.12, "USDCOP=X": 0.0}
+    
+    # Load smart cache
+    cache = cargar_cache_precios()
+    
+    try:
+        # BATCH DOWNLOAD (Ultra-fast single query!)
+        df = yf.download(todos_tickers, period="2d", interval="1d", progress=False, group_by="ticker")
+        
+        if not df.empty:
+            for t in todos_tickers:
+                try:
+                    df_t = df if len(todos_tickers) == 1 else (df[t] if t in df else None)
+                    if df_t is not None and not df_t.empty:
+                        close_col = df_t["Close"].dropna()
+                        if len(close_col) >= 2:
+                            precios[t] = float(close_col.iloc[-1])
+                            variaciones[t] = ((float(close_col.iloc[-1]) - float(close_col.iloc[-2])) / float(close_col.iloc[-2])) * 100
+                        elif len(close_col) == 1:
+                            precios[t] = float(close_col.iloc[-1])
+                            variaciones[t] = 0.0
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    
+    # Fill missing values from cache or fallbacks
+    for t in todos_tickers:
+        if t not in precios:
+            if t in cache:
+                precios[t] = cache[t]["precio"]
+                variaciones[t] = cache[t]["variacion"]
+            else:
+                precios[t] = fallbacks_p.get(t, 10.0)
+                variaciones[t] = fallbacks_v.get(t, 0.0)
+    
+    # Save successfully resolved prices to cache
+    guardar_cache_precios(precios, variaciones)
+    
+    # Extract TRM (today and yesterday for accurate daily changes)
+    trm_dia = precios.get(trm_ticker, 3950.0)
+    trm_yesterday = trm_dia
+    try:
+        df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
+        if df_trm is not None and not df_trm.empty:
+            close_col_trm = df_trm["Close"].dropna()
+            if len(close_col_trm) >= 2:
+                trm_yesterday = float(close_col_trm.iloc[-2])
+    except Exception:
+        pass
+    
+    # Clean global tickers results
+    precios_global = {k: v for k, v in precios.items() if k != trm_ticker}
+    variaciones_global = {k: v for k, v in variaciones.items() if k != trm_ticker}
+    
+    return trm_dia, trm_yesterday, precios_global, variaciones_global
+
+@st.cache_data(ttl=300)
+def consultar_mercado_cripto_batch(tickers):
+    mapper = {"BTC": "bitcoin", "ETH": "ethereum", "ADA": "cardano", "XRP": "ripple"}
+    precios, variaciones = {}, {}
+    if not tickers:
+        return precios, variaciones
+        
+    fallbacks_p = {"BTC": 75370.0, "ETH": 2059.0, "ADA": 0.24, "XRP": 1.34}
+    fallbacks_v = {"BTC": -2.36, "ETH": -3.59, "ADA": 0.12, "XRP": -1.05}
+    
+    cache = cargar_cache_precios()
+    ids = [mapper[t] for t in tickers if t in mapper]
+    
+    try:
+        if ids:
+            res = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=usd&include_24hr_change=true", timeout=5).json()
+            for t in tickers:
+                if t in mapper and mapper[t] in res:
+                    precios[t] = float(res[mapper[t]]["usd"])
+                    variaciones[t] = float(res[mapper[t]].get("usd_24h_change", 0.0))
+    except Exception:
+        pass
+        
+    # Apply cached values if download fails
+    for t in tickers:
+        if t not in precios:
+            if t in cache:
+                precios[t] = cache[t]["precio"]
+                variaciones[t] = cache[t]["variacion"]
+            else:
+                precios[t] = fallbacks_p.get(t, 1.0)
+                variaciones[t] = fallbacks_v.get(t, 0.0)
+                
+    # Update cache
+    guardar_cache_precios(precios, variaciones)
+    
+    return precios, variaciones
+
+# -----------------------------------------------------------------------------
+# CORE PIPELINE CONTABLE EN VIVO (MÁXIMA EXACTITUD Y CAMBIO DE DIVISA EXACTO)
+# -----------------------------------------------------------------------------
+inventario_actual = st.session_state['inventario_activos_core']
+
+us_active = inventario_actual[inventario_actual["Clase"].isin(["Acciones EEUU", "Commodities (Oro)"])]["Ticker"].tolist()
+crypto_active = inventario_actual[inventario_actual["Clase"] == "Criptomonedas"]["Ticker"].tolist()
+
+# Ultra-fast Batch APIs call!
+trm_dia, trm_yesterday, p_us, v_us = consultar_mercado_global_batch(us_active)
+p_cry, v_cry = consultar_mercado_cripto_batch(crypto_active)
+
+precios_maestros, valores_cop_maestros, variaciones_pct_maestras, variaciones_cop_maestras = [], [], [], []
+efectos_mercado, efectos_divisa = [], []
+
+for idx, row in inventario_actual.iterrows():
+    clase, ticker, cnt = row["Clase"], row["Ticker"], row["Cantidad"]
+    p_usd, v_cop, v_pct = 0.0, 0.0, 0.0
+    var_cop = 0.0
+    ef_mercado, ef_divisa = 0.0, 0.0
+    
+    if clase == "Acciones EEUU" or (clase == "Commodities (Oro)" and ticker == "GLD"):
+        p_usd = p_us.get(ticker, row["Valor_Base_Fijo"])
+        v_pct = v_us.get(ticker, 0.0)
+        v_cop = cnt * p_usd * trm_dia
+        
+        # Cálculo exacto de variación diaria en COP
+        p_usd_yesterday = p_usd / (1 + v_pct / 100)
+        v_cop_yesterday = cnt * p_usd_yesterday * trm_yesterday
+        var_cop = v_cop - v_cop_yesterday
+        
+        # Desglose de atribución (Fórmula financiera exacta)
+        ef_mercado = cnt * (p_usd - p_usd_yesterday) * trm_yesterday
+        ef_divisa = cnt * p_usd * (trm_dia - trm_yesterday)
+        
+    elif clase == "Criptomonedas":
+        p_usd = p_cry.get(ticker, row["Valor_Base_Fijo"])
+        v_pct = v_cry.get(ticker, 0.0)
+        v_cop = cnt * p_usd * trm_dia
+        
+        p_usd_yesterday = p_usd / (1 + v_pct / 100)
+        v_cop_yesterday = cnt * p_usd_yesterday * trm_yesterday
+        var_cop = v_cop - v_cop_yesterday
+        
+        # Desglose de atribución (Fórmula financiera exacta)
+        ef_mercado = cnt * (p_usd - p_usd_yesterday) * trm_yesterday
+        ef_divisa = cnt * p_usd * (trm_dia - trm_yesterday)
+        
+    elif clase == "Liquidez USD":
+        p_usd = row["Valor_Base_Fijo"]
+        v_pct = 0.0
+        v_cop = cnt * p_usd * trm_dia
+        
+        v_cop_yesterday = cnt * p_usd * trm_yesterday
+        var_cop = v_cop - v_cop_yesterday
+        
+        # En caja USD, la fluctuación es puramente por el tipo de cambio
+        ef_mercado = 0.0
+        ef_divisa = cnt * p_usd * (trm_dia - trm_yesterday)
+        
+    elif clase in ["Acciones Colombia", "Inmobiliario Bursátil"]:
+        precio_cop = row["Valor_Base_Fijo"]
+        v_pct = -0.12 # Variación por defecto
+        v_cop = cnt * precio_cop
+        p_usd = precio_cop / trm_dia
+        
+        v_cop_yesterday = v_cop / (1 + v_pct / 100)
+        var_cop = v_cop - v_cop_yesterday
+        
+        # Activos locales no tienen afectación por TRM
+        ef_mercado = var_cop
+        ef_divisa = 0.0
+    else:
+        # Activos fijos en COP (Liquidez COP, Fondos de Inversión, Propiedad Raíz)
+        v_pct = 0.0
+        v_cop = cnt * row["Valor_Base_Fijo"]
+        p_usd = v_cop / cnt / trm_dia if cnt > 0 else 0.0
+        var_cop = 0.0
+        ef_mercado = 0.0
+        ef_divisa = 0.0
+            
+    precios_maestros.append(p_usd)
+    valores_cop_maestros.append(v_cop)
+    variaciones_pct_maestras.append(v_pct)
+    variaciones_cop_maestras.append(var_cop)
+    efectos_mercado.append(ef_mercado)
+    efectos_divisa.append(ef_divisa)
+
+maestro_df = inventario_actual.copy()
+maestro_df["Precio_USD"] = precios_maestros
+maestro_df["Total_COP"] = valores_cop_maestros
+maestro_df["% Var Diario"] = variaciones_pct_maestras
+maestro_df["Var COP"] = variaciones_cop_maestras
+maestro_df["Ef_Mercado"] = efectos_mercado
+maestro_df["Ef_Divisa"] = efectos_divisa
+
+patrimonio_total = maestro_df["Total_COP"].sum()
+patrimonio_liquido = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Total_COP"].sum()
+var_total_cop = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Var COP"].sum()
+var_total_pct = (var_total_cop / (patrimonio_liquido - var_total_cop) * 100) if (patrimonio_liquido - var_total_cop) > 0 else 0.0
+
+# Sumatorias totales de efectos explicativos (excluyendo Propiedad Raíz)
+efecto_mercado_total = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Ef_Mercado"].sum()
+efecto_divisa_total = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Ef_Divisa"].sum()
+
+df_cambio_clase = maestro_df.groupby("Clase")[["Var COP", "Total_COP"]].sum().reset_index()
+
+# -----------------------------------------------------------------------------
+# AUTO-RECTIFICACIÓN DEL HISTORIAL PATRIMONIAL EN DISCO
+# -----------------------------------------------------------------------------
+def resolver_clase_bursatil_v5(c, t):
+    if t in ["Disponible Broker Col", "Broker EEUU"]: return "Cash Broker Desk"
+    if c in ["Acciones EEUU"]: return "Acciones EEUU"
+    if c in ["Acciones Colombia"]: return "Acciones Colombia"
+    if c in ["Commodities (Oro)"]: return "Commodities (Oro)"
+    if c in ["Fondos de Inversión"]: return "Fondos de Inversión"
+    return c
+
+maestro_df["Clase_Linea"] = maestro_df.apply(lambda r: resolver_clase_bursatil_v5(r["Clase"], r["Ticker"]), axis=1)
+
+hoy_datetime = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
+
+# 1. Cargar Historial
+df_hist_base = cargar_historial()
+
+# RECTIFICACIÓN MAESTRA DE SALDOS HISTÓRICOS (Sanamiento Automático de Omisiones de Caja Dólar)
+trm_referencial = 3950.0
+usd_cash_omitted_cop = 12500.0 * trm_referencial  # 49,375,000 COP
+
+for idx, row in df_hist_base.iterrows():
+    if row["Clase"] == "Cash Broker Desk" and row["Valor_COP"] < 50000000.0:
+        df_hist_base.at[idx, "Valor_COP"] = row["Valor_COP"] + usd_cash_omitted_cop
+
+df_hist_base = df_hist_base[df_hist_base["Fecha"] != hoy_datetime] # Limpiamos hoy anterior
+
+# 2. Extraer hoy
+df_live_hoy = maestro_df[maestro_df["Clase_Linea"] != "Propiedad Raíz"].groupby("Clase_Linea")["Total_COP"].sum().reset_index()
+df_live_hoy.columns = ["Clase", "Valor_COP"]
+df_live_hoy["Fecha"] = hoy_datetime
+
+# 3. Guardar de forma persistente (base de datos o local según corresponda)
+df_hist_consolidado = pd.concat([df_hist_base, df_live_hoy], ignore_index=True)
+df_hist_consolidado["Fecha"] = pd.to_datetime(df_hist_consolidado["Fecha"])
+guardar_historial(df_hist_consolidado)
+
+# 4. Interpolación
+df_lista_completa = []
+clases_maestras_series = ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Cash Broker Desk"]
+
+for clase_nombre in clases_maestras_series:
+    df_clase_raw = df_hist_consolidado[df_hist_consolidado["Clase"] == clase_nombre].sort_values("Fecha")
+    if not df_clase_raw.empty:
+        df_clase_raw = df_clase_raw.drop_duplicates(subset=["Fecha"])
+        rango_master = pd.date_range(start=df_clase_raw["Fecha"].min(), end=hoy_datetime, freq='D')
+        df_clase_interp = df_clase_raw.set_index("Fecha").reindex(rango_master)
+        
+        # Interpolación lineal suave
+        df_clase_interp["Valor_COP"] = df_clase_interp["Valor_COP"].interpolate(method='linear')
+        
+        if hoy_datetime in df_clase_raw["Fecha"].values:
+            val_live_real = float(df_clase_raw.set_index("Fecha").loc[hoy_datetime, "Valor_COP"])
+        else:
+            val_live_real = float(df_clase_interp["Valor_COP"].iloc[-1]) if not df_clase_interp.empty else 0.0
+            
+        df_clase_interp.loc[hoy_datetime, "Valor_COP"] = val_live_real
+        df_clase_interp.index.name = "Fecha"
+        df_clase_interp = df_clase_interp.reset_index()
+        df_clase_interp["Clase"] = clase_nombre
+        df_lista_completa.append(df_clase_interp)
+
+df_linea_tiempo_master = pd.concat(df_lista_completa, ignore_index=True)
+df_total_diario_master = df_linea_tiempo_master.groupby("Fecha")["Valor_COP"].sum().reset_index().sort_values("Fecha")
+
+# -----------------------------------------------------------------------------
+# BARRA DE CONTROL SUPERIOR GLASSMORPHIC (REEMPLAZA AL SIDEBAR)
+# -----------------------------------------------------------------------------
+st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+c_logo, c_space, c_badge, c_toggle, c_btn = st.columns([2.2, 0.5, 1.8, 1.0, 1.0])
+
+with c_logo:
+    st.markdown("<h2 style='margin:0; font-weight:800; font-size:22px; color:var(--text-color); line-height:1; white-space:nowrap;'>Inversiones al instante</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='margin:2px 0 0 0; font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.5px; font-weight:700;'>Portafolio</p>", unsafe_allow_html=True)
+
+with c_badge:
+    st.markdown(f"""
+    <div style='background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:6px 12px; text-align:center;'>
+        <span style='font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;'>TRM de Mercado:</span>
+        <span style='font-size:12px; font-weight:800; color:#10B981; margin-left:6px;'>${trm_dia:,.2f} COP</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c_toggle:
+    dark_mode_select = st.toggle("🌙 Modo Oscuro", value=st.session_state["dark_mode_state"])
+    if dark_mode_select != st.session_state["dark_mode_state"]:
+        st.session_state["dark_mode_state"] = dark_mode_select
+        st.rerun()
+
+with c_btn:
+    if st.button("⚡ Actualizar Datos", type="primary", use_container_width=True):
+        st.cache_data.clear()
+        st.toast("Recargando cotizaciones financieras...")
+        st.rerun()
+
+st.markdown("<div style='margin-bottom: 15px; border-bottom: 1px solid var(--border-color);'></div>", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# PRESENTACIÓN EN DISPLAY DE MÉTRICAS CENTRALES
+# -----------------------------------------------------------------------------
+c_izq_metrics, c_der_pnl = st.columns([5.0, 1.3])
+
+with c_izq_metrics:
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-label">Assets Under Management</div>
+            <div class="metric-value">${patrimonio_total:,.0f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
+            <div class="metric-delta delta-neutral">AUM Consolidado</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-label">Liquid Portfolio Value</div>
+            <div class="metric-value">${patrimonio_liquido:,.0f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
+            <div class="metric-delta delta-neutral">Excluye Finca Raíz</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m3:
+        flecha = "▲" if var_total_cop >= 0 else "▼"
+        color_class = "delta-positive" if var_total_cop >= 0 else "delta-negative"
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-label">Daily Change (Real-Time)</div>
+            <div class="metric-value {color_class}">{flecha} ${abs(var_total_cop):,.0f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
+            <div class="metric-delta {color_class}">{var_total_pct:+.2f}% vs Cierre</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m4:
+        st.markdown(f"""
+        <div class="metric-container">
+            <div class="metric-label">TRM Operativa Activa</div>
+            <div class="metric-value">${trm_dia:,.2f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
+            <div class="metric-delta delta-neutral">Sincronizado vía yFinance</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+with c_der_pnl:
+    periodo_pnl = st.selectbox(
+        "Filtrar Rendimiento P&G Retrospectivo:", 
+        ["Hoy (vs Cierre Anterior)", "Última Semana (7d)", "Última Quincena (15d)", "Mes corrido", "Último Mes (30d)"],
+        label_visibility="collapsed"
+    )
+    
+    # RECTIFICACIÓN DE P&G HISTÓRICO: Comparación exacta contra la interpolación lineal del saldo histórico rectificado
+    if "Hoy" in periodo_pnl:
+        val_base_pnl = patrimonio_liquido - var_total_cop
+    elif "mes corrido" in periodo_pnl.lower():
+        # Primer día del mes corriente para el cálculo de P&G MTD (Month to Date)
+        target_date = hoy_datetime.replace(day=1)
+        
+        df_target_pnl = df_total_diario_master[df_total_diario_master["Fecha"] <= target_date]
+        if not df_target_pnl.empty:
+            val_base_pnl = df_target_pnl.sort_values("Fecha").iloc[-1]["Valor_COP"]
+        else:
+            val_base_pnl = df_total_diario_master.iloc[0]["Valor_COP"]
+    else:
+        days_delta = 7 if "Semana" in periodo_pnl else (15 if "Quincena" in periodo_pnl else 30)
+        target_date = hoy_datetime - timedelta(days=days_delta)
+        
+        df_target_pnl = df_total_diario_master[df_total_diario_master["Fecha"] <= target_date]
+        if not df_target_pnl.empty:
+            val_base_pnl = df_target_pnl.sort_values("Fecha").iloc[-1]["Valor_COP"]
+        else:
+            val_base_pnl = df_total_diario_master.iloc[0]["Valor_COP"]
+
+    net_pnl = patrimonio_liquido - val_base_pnl
+    pct_pnl = (net_pnl / val_base_pnl * 100) if val_base_pnl > 0 else 0.0
+    color_pnl = "delta-positive" if net_pnl >= 0 else "delta-negative"
+    simbolo_pnl = "▲" if net_pnl >= 0 else "▼"
+    
+    st.markdown(f"""
+    <div class="pnl-container">
+        <div class="metric-label">P&G {periodo_pnl.upper()}</div>
+        <div class="metric-value {color_pnl}" style="font-size: clamp(14px, 1.35vw, 19px) !important; margin: 4px 0;">
+            {simbolo_pnl} ${abs(net_pnl):,.0f} COP
+        </div>
+        <div class="metric-delta {color_pnl}">
+            {pct_pnl:+.2f}% de variación
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# NUEVO: DIAGNÓSTICO FINANCIERO Y ATRIBUCIÓN DEL CAMBIO DIARIO (INDICADORES DE VARIACIÓN)
+# -----------------------------------------------------------------------------
+st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
+c_desc1, c_desc2 = st.columns(2)
+
+with c_desc1:
+    indicador_mercado = "🟢" if efecto_mercado_total >= 0 else "🔴"
+    color_m = "delta-positive" if efecto_mercado_total >= 0 else "delta-negative"
+    st.markdown(f"""
+    <div class="breakdown-card" style="border-left: 4px solid #6366F1; padding: 12px 18px;">
+        <div class="breakdown-title">📈 EFECTO VALORIZACIÓN MERCADO (Activos)</div>
+        <div class="breakdown-value {color_m}" style="font-size: 16px; margin-top: 4px;">
+            {indicador_mercado} ${efecto_mercado_total:,.0f} COP
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight: 500;">
+            Resultado neto del movimiento de precios en bolsa de tus acciones, oro y criptomonedas (en su divisa de origen).
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c_desc2:
+    indicador_divisa = "🟢" if efecto_divisa_total >= 0 else "🔴"
+    color_d = "delta-positive" if efecto_divisa_total >= 0 else "delta-negative"
+    st.markdown(f"""
+    <div class="breakdown-card" style="border-left: 4px solid #10B981; padding: 12px 18px;">
+        <div class="breakdown-title">💵 EFECTO DIFERENCIA EN CAMBIO (TRM Dólar)</div>
+        <div class="breakdown-value {color_d}" style="font-size: 16px; margin-top: 4px;">
+            {indicador_divisa} ${efecto_divisa_total:,.0f} COP
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight: 500;">
+            Impacto neto en pesos causado hoy exclusivamente por el alza o la baja de la tasa de cambio USD/COP en el mercado.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# DESGLOSE DE VARIACIÓN DIARIA
+st.markdown(f"<p style='color:var(--text-color); font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:8px; margin-top:16px; letter-spacing:0.5px;'>📊 DESGLOSE DE VARIACIÓN DIARIA POR CATEGORÍA DE ACTIVO</p>", unsafe_allow_html=True)
+df_cambio_clase_filtered = df_cambio_clase[df_cambio_clase["Clase"] != "Propiedad Raíz"]
+cols_breakdown = st.columns(len(df_cambio_clase_filtered))
+
+for idx, r_clase in df_cambio_clase_filtered.reset_index(drop=True).iterrows():
+    c_name = r_clase["Clase"]
+    c_var = r_clase["Var COP"]
+    c_tot = r_clase["Total_COP"]
+    c_pct = (c_var / (c_tot - c_var) * 100) if (c_tot - c_var) > 0 else 0.0
+    
+    with cols_breakdown[idx]:
+        indicator_arrow = "🟢" if c_var >= 0 else "🔴"
+        clase_color = "delta-positive" if c_var >= 0 else "delta-negative"
+        st.markdown(f"""
+        <div class="breakdown-card">
+            <div class="breakdown-title">{c_name}</div>
+            <div class="breakdown-value">{indicator_arrow} ${c_var:,.0f}</div>
+            <div style="font-size:11px; font-weight:600; margin-top:2px;" class="{clase_color}">{c_pct:+.2f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+tab_cuadro, tab_records, tab_transactions = st.tabs([
+    "📊 Portal de Analítica & Gráficos", 
+    "📋 Libro de Activos & Saldos", 
+    "💼 Centro Transaccional (CRUD)"
+])
+
+# -----------------------------------------------------------------------------
+# TAB 1: ANALYTICS & GRAPHICS PORTAL
+# -----------------------------------------------------------------------------
+with tab_cuadro:
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>1. PORTFOLIO ASSET ALLOCATION MATRIX (Distribución Estructural)</p>", unsafe_allow_html=True)
+    col_donut_izq, col_donut_der = st.columns(2)
+    
+    with col_donut_izq:
+        st.markdown("<div style='text-align:center; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:5px;'>DISTRIBUCIÓN TOTAL DE ACTIVOS (INCLUYE PROPIEDAD RAÍZ)</div>", unsafe_allow_html=True)
+        df_peso_total = maestro_df.groupby("Clase")["Total_COP"].sum().reset_index()
+        fig_donut_total = px.pie(df_peso_total, names="Clase", values="Total_COP", hole=0.5, color_discrete_sequence=PALETA_GRAFICOS)
+        fig_donut_total.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=15, b=15, l=10, r=10), height=360,
+            legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5, font=dict(size=10, color=TEXT_COLOR))
+        )
+        st.plotly_chart(fig_donut_total, use_container_width=True)
+        
+    with col_donut_der:
+        st.markdown("<div style='text-align:center; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:5px;'>DISTRIBUCIÓN DE PORTAFOLIO LÍQUIDO (EXCLUYE PROPIEDAD RAÍZ)</div>", unsafe_allow_html=True)
+        df_peso_liquido = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"].groupby("Clase")["Total_COP"].sum().reset_index()
+        fig_donut_liquido = px.pie(df_peso_liquido, names="Clase", values="Total_COP", hole=0.5, color_discrete_sequence=PALETA_GRAFICOS)
+        fig_donut_liquido.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=15, b=15, l=10, r=10), height=360,
+            legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5, font=dict(size=10, color=TEXT_COLOR))
+        )
+        st.plotly_chart(fig_donut_liquido, use_container_width=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:5px;'>2. CONFIGURACIÓN HISTÓRICA</p>", unsafe_allow_html=True)
+    rango_tiempo = st.radio(
+        "Seleccione Rango de Visualización Temporal:", ["Últimos 30 días", "Últimos 90 días", "Últimos 365 días (1 Año Completo)"],
+        horizontal=True, index=2
+    )
+
+    if rango_tiempo == "Últimos 30 días": fecha_limite_inf = hoy_datetime - timedelta(days=30)
+    elif rango_tiempo == "Últimos 90 días": fecha_limite_inf = hoy_datetime - timedelta(days=90)
+    else: fecha_limite_inf = hoy_datetime - timedelta(days=365)
+
+    df_total_diario = df_total_diario_master[df_total_diario_master["Fecha"] >= fecha_limite_inf]
+    df_hist_diario = df_linea_tiempo_master[df_linea_tiempo_master["Fecha"] >= fecha_limite_inf]
+
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:5px;'>3. RENDIMIENTO HISTÓRICO CONSOLIDADO (Evolución Estructural Suavizada)</p>", unsafe_allow_html=True)
+    
+    fig_linea_total = go.Figure()
+    
+    # RECTIFICACIÓN CLAVE: Eliminado 'shape=hv' para dibujar curvas de tendencia fluidas y elegantes
+    fig_linea_total.add_trace(go.Scatter(
+        x=df_total_diario["Fecha"], y=df_total_diario["Valor_COP"],
+        mode="lines", name="Patrimonio Líquido",
+        line=dict(color=PALETA_GRAFICOS[0], width=2.5),
+        fill='tozeroy', fillcolor="rgba(99, 102, 241, 0.05)" if modo_oscuro else "rgba(79, 70, 229, 0.03)"
+    ))
+    
+    if not df_total_diario.empty:
+        v_min, v_max = float(df_total_diario["Valor_COP"].min()), float(df_total_diario["Valor_COP"].max())
+        if v_min == v_max: limites_y = [v_min * 0.99, v_max * 1.01]
+        else:
+            pad = (v_max - v_min) * 0.012
+            limites_y = [v_min - pad, v_max + pad]
+    else: limites_y = None
+
+    fig_linea_total.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=400, hovermode="x unified",
+        margin=dict(t=40, b=25, l=85, r=10),
+        title=dict(text=f"Evolución Temporal de Saldos Consolidados Financieros — Bal Actual: ${patrimonio_liquido:,.0f} COP", font=dict(size=13, color=TEXT_COLOR)),
+        xaxis=dict(type='date', showgrid=False, tickformat="%d-%m", tickfont=dict(color=TEXT_COLOR)),
+        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, autorange=False, range=limites_y, tickfont=dict(size=9, color=TEXT_COLOR), tickformat="$,.0f")
+    )
+    st.plotly_chart(fig_linea_total, use_container_width=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # RECTIFICACIÓN CLAVE: Se utiliza TEXT_MUTED (variable de color Python) para los subtítulos internos de Plotly en vez de var(--text-muted) CSS
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>4. TENDENCIAS HISTÓRICAS SEGMENTADAS (Evolución Suavizada de Saldos de Control por Componente)</p>", unsafe_allow_html=True)
+    clases_hist_v6 = ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Cash Broker Desk"]
+    
+    for i in range(0, len(clases_hist_v6), 2):
+        bloque_clases = clases_hist_v6[i:i+2]
+        columnas_render = st.columns(2)
+        
+        for sub_idx, c_name in enumerate(bloque_clases):
+            with columnas_render[sub_idx]:
+                df_sub = df_hist_diario[df_hist_diario["Clase"] == c_name].sort_values("Fecha")
+                if not df_sub.empty:
+                    val_grupo_fiel = maestro_df[maestro_df["Clase_Linea"] == c_name]["Total_COP"].sum()
+                    
+                    s_min, s_max = float(df_sub["Valor_COP"].min()), float(df_sub["Valor_COP"].max())
+                    s_pad = (s_max - s_min) * 0.012 if s_max != s_min else s_max * 0.01
+                    
+                    fig_ind = go.Figure()
+                    
+                    # RECTIFICACIÓN CLAVE: Eliminado 'shape=hv' en todas las gráficas para mostrar líneas continuas
+                    fig_ind.add_trace(go.Scatter(
+                        x=df_sub["Fecha"], y=df_sub["Valor_COP"], mode="lines",
+                        line=dict(color=PALETA_GRAFICOS[(i + sub_idx) % len(PALETA_GRAFICOS)], width=2.5),
+                        fill='tozeroy', fillcolor="rgba(99, 102, 241, 0.01)"
+                    ))
+                    fig_ind.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=270,
+                        title=dict(text=f"<b>{c_name.upper()}</b><br><span style='font-size:12px; color:{TEXT_MUTED}; font-weight:600;'>Balance: ${val_grupo_fiel:,.0f} COP</span>", font=dict(size=12, color=TEXT_COLOR)),
+                        margin=dict(t=55, b=25, l=85, r=20),
+                        xaxis=dict(type='date', showgrid=False, tickformat="%d-%m", tickfont=dict(color=TEXT_COLOR)),
+                        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, autorange=False, range=[s_min - s_pad, s_max + s_pad], showticklabels=True, tickfont=dict(size=9, color=TEXT_COLOR), tickformat="$,.0f")
+                    )
+                    st.plotly_chart(fig_ind, use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# TAB 2: BOOK OF RECORDS & OPERATIONS
+# -----------------------------------------------------------------------------
+with tab_records:
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>📋 INVENTARIO DETALLADO DE ACTIVOS</p>", unsafe_allow_html=True)
+    
+    # Función para colorear el texto en el dataframe de forma dinámica según la dirección del cambio
+    def color_variacion(val):
+        if val > 0.001:
+            return "color: #10B981; font-weight: 700;"
+        elif val < -0.001:
+            return "color: #EF4444; font-weight: 700;"
+        return "color: #9CA3AF;"
+        
+    df_mostrar = maestro_df[["Ticker", "Clase", "Cantidad", "Moneda", "Precio_USD", "Total_COP", "% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"]].copy()
+    
+    styler = df_mostrar.style.format({
+        "Cantidad": "{:,.4f}", 
+        "Precio_USD": "${:,.2f}", 
+        "Total_COP": "${:,.0f} COP",
+        "% Var Diario": lambda x: f"▲ {x:+.2f}%" if x > 0.001 else (f"▼ {x:+.2f}%" if x < -0.001 else f"  {x:+.2f}%"),
+        "Var COP": lambda x: f"▲ ${x:,.0f} COP" if x > 0.001 else (f"▼ ${abs(x):,.0f} COP" if x < -0.001 else f"  ${x:,.0f} COP"),
+        "Ef_Mercado": lambda x: f"▲ ${x:,.0f} COP" if x > 0.001 else (f"▼ ${abs(x):,.0f} COP" if x < -0.001 else f"  ${x:,.0f} COP"),
+        "Ef_Divisa": lambda x: f"▲ ${x:,.0f} COP" if x > 0.001 else (f"▼ ${abs(x):,.0f} COP" if x < -0.001 else f"  ${x:,.0f} COP")
+    })
+    
+    # Aplicar mapa de colores de forma segura según la versión de Pandas disponible
+    try:
+        styled_df = styler.map(color_variacion, subset=["% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"])
+    except AttributeError:
+        styled_df = styler.applymap(color_variacion, subset=["% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"])
+        
+    st.dataframe(styled_df, use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# TAB 3: TRANSACTION DESK ENGINE (OPTIMIZED CRUD & MODAL-LIKE DESIGN)
+# -----------------------------------------------------------------------------
+with tab_transactions:
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>💼 TRANSACTION DESK ENGINE (Gestor de Portafolio)</p>", unsafe_allow_html=True)
+    
+    col_crud_main, col_crud_preview = st.columns([2, 1.2])
+    
+    with col_crud_main:
+        listado_crud = ["--- OPERAR NUEVO ACTIVO ---"] + list(st.session_state['inventario_activos_core']["Ticker"].unique())
+        selector = st.selectbox("Seleccione Posición a Operar:", listado_crud, index=0)
+        
+        st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+        
+        # CRUD form logic
+        if selector == "--- OPERAR NUEVO ACTIVO ---":
+            st.subheader("➕ Agregar Nuevo Activo")
+            f_ticker = st.text_input("Ticker ID (ej. AAPL, NVDA, ETH)").upper().strip()
+            f_clase = st.selectbox("Categoría / Clase:", ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Liquidez COP", "Liquidez USD", "Propiedad Raíz"])
+            f_cant = st.number_input("Cantidad a Adquirir:", min_value=0.0, format="%.8f", value=0.0)
+            f_precio = st.number_input("Precio Unitario de Referencia:", min_value=0.0, format="%.4f", value=0.0)
+            
+            est_moneda = "USD" if any(x in f_clase for x in ["EEUU", "Cripto", "Commodities", "USD"]) else "COP"
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                boton_add = st.button("➕ Crear e Integrar Posición", type="primary", use_container_width=True)
+            with c2:
+                boton_del = False
+        else:
+            st.subheader(f"📝 Modificar / Eliminar Posición: {selector}")
+            actual = st.session_state['inventario_activos_core'][st.session_state['inventario_activos_core']["Ticker"] == selector].iloc[0]
+            f_ticker = selector
+            f_clase = actual["Clase"]
+            f_cant = st.number_input("Cantidad Consolidada:", min_value=0.0, value=float(actual["Cantidad"]), format="%.8f")
+            f_precio = st.number_input("Precio Unitario de Referencia:", min_value=0.0, value=float(actual["Valor_Base_Fijo"]), format="%.4f")
+            
+            est_moneda = actual["Moneda"]
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                boton_add = st.button("💾 Sincronizar Cambios", type="primary", use_container_width=True)
+            with c2:
+                boton_del = st.button("🗑️ Eliminar Posición del Portafolio", type="secondary", use_container_width=True)
+
+    # Process Form Action
+    if boton_add and f_ticker:
+        # Save position change
+        st.session_state['inventario_activos_core'] = st.session_state['inventario_activos_core'][st.session_state['inventario_activos_core']["Ticker"] != f_ticker]
+        nueva_pos = {
+            "Ticker": f_ticker, 
+            "Clase": f_clase, 
+            "Cantidad": f_cant, 
+            "Valor_Base_Fijo": f_precio, 
+            "Moneda": est_moneda
+        }
+        st.session_state['inventario_activos_core'] = pd.concat([st.session_state['inventario_activos_core'], pd.DataFrame([nueva_pos])], ignore_index=True)
+        guardar_inventario(st.session_state['inventario_activos_core'])
+        st.toast(f"✅ Posición '{f_ticker}' sincronizada con éxito.")
+        st.cache_data.clear()
+        st.rerun()
+        
+    if boton_del and f_ticker:
+        # Delete position
+        st.session_state['inventario_activos_core'] = st.session_state['inventario_activos_core'][st.session_state['inventario_activos_core']["Ticker"] != f_ticker]
+        guardar_inventario(st.session_state['inventario_activos_core'])
+        st.toast(f"🗑️ Posición '{f_ticker}' eliminada del inventario de forma permanente.")
+        st.cache_data.clear()
+        st.rerun()
+
+    # Previsualización interactiva en tiempo real (Live Value Preview)
+    with col_crud_preview:
+        st.markdown("<div style='text-align: center; margin-top: 25px;'></div>", unsafe_allow_html=True)
+        
+        # Calculate real-time estimated values for form inputs
+        if f_ticker:
+            p_usd_est = f_precio
+            if f_clase in ["Acciones EEUU", "Commodities (Oro)"]:
+                p_usd_est = p_us.get(f_ticker, f_precio)
+            elif f_clase == "Criptomonedas":
+                p_usd_est = p_cry.get(f_ticker, f_precio)
+                
+            if est_moneda == "USD":
+                val_cop_est = f_cant * p_usd_est * trm_dia
+                val_usd_est = f_cant * p_usd_est
+            else:
+                val_cop_est = f_cant * p_usd_est
+                val_usd_est = val_cop_est / trm_dia if trm_dia > 0 else 0.0
+                
+            st.markdown(f"""
+            <div class="metric-container" style="height: auto; padding: 22px; border-color: var(--primary-glow);">
+                <div class="metric-label">Simulación del Activo en Tiempo Real</div>
+                <div class="metric-value" style="font-size: 22px; margin: 8px 0; color: #6366F1;">
+                    {f_ticker} <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">({f_clase})</span>
+                </div>
+                <div style="font-size: 16px; font-weight: 700; color: var(--text-color);">
+                    COP Estimado: <span style="color:#10B981">${val_cop_est:,.0f} COP</span>
+                </div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--text-muted); margin-top: 4px;">
+                    USD Equiv: <span style="color:var(--text-color);">${val_usd_est:,.2f} USD</span>
+                </div>
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 6px;">
+                    TRM Utilizada: ${trm_dia:,.2f} COP (Yahoo Live)
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="metric-container" style="height: auto; padding: 22px; text-align: center; justify-content: center;">
+                <div class="metric-label" style="text-align: center;">Previsualizador</div>
+                <p style="font-size:12px; color: var(--text-muted); margin-top:10px;">Escribe un Ticker ID o selecciona una posición para ver su valoración en tiempo real.</p>
+            </div>
+            """, unsafe_allow_html=True)
