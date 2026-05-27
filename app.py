@@ -436,24 +436,38 @@ st.markdown(f"""
     }}
     
     /* Desglose de variaciones de categoría */
-    .breakdown-card {{
+    .category-grid {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: flex-start;
+        width: 100%;
+        margin-top: 8px;
+    }}
+    .category-card {{
         background: var(--card-bg);
         border: 1px solid var(--border-color);
-        border-radius: 10px;
-        padding: 10px 14px;
+        border-radius: 12px;
+        padding: 14px 16px;
         box-shadow: var(--shadow);
-        transition: all 0.25s ease;
-        text-align: left;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        flex: 1 1 calc(25% - 12px);
+        min-width: 170px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         overflow: hidden;
+        position: relative;
     }}
-    .breakdown-card:hover {{
-        transform: translateY(-2px);
+    .category-card:hover {{
+        transform: translateY(-4px);
         border-color: var(--primary-glow);
+        box-shadow: var(--shadow-hover);
     }}
     .breakdown-title {{
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 700;
         color: var(--text-muted) !important;
         text-transform: uppercase;
@@ -461,10 +475,10 @@ st.markdown(f"""
         white-space: nowrap;
     }}
     .breakdown-value {{
-        font-size: clamp(11px, 1.1vw, 14px) !important;
+        font-size: 17px !important;
         font-weight: 800;
         color: var(--text-color) !important;
-        margin-top: 3px;
+        margin-top: 5px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -504,6 +518,40 @@ st.markdown(f"""
     
     hr {{
         border-top: 1px solid var(--border-color) !important;
+    }}
+    
+    /* Responsividad avanzada para PC y Celulares (Enforce clean mobile columns) */
+    @media (max-width: 768px) {{
+        div[data-testid="stHorizontalBlock"] {{
+            flex-direction: column !important;
+            gap: 12px !important;
+        }}
+        div[data-testid="column"] {{
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 100% !important;
+            margin-left: 0px !important;
+            margin-right: 0px !important;
+            margin-top: 4px !important;
+        }}
+        /* Tarjetas de Métricas en Celular */
+        .metric-container, .pnl-container {{
+            height: auto !important;
+            padding: 12px 14px !important;
+        }}
+        .metric-value {{
+            font-size: 20px !important;
+        }}
+        /* Evitar que las breakdown cards colapsen o queden desalineadas */
+        .category-card {{
+            flex: 1 1 calc(50% - 12px) !important;
+            min-width: 140px !important;
+            padding: 10px 12px !important;
+            margin-bottom: 4px !important;
+        }}
+        .breakdown-value {{
+            font-size: 15px !important;
+        }}
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -624,21 +672,22 @@ inventario_actual = st.session_state['inventario_activos_core']
 us_active = inventario_actual[inventario_actual["Clase"].isin(["Acciones EEUU", "Commodities (Oro)"])]["Ticker"].tolist()
 crypto_active = inventario_actual[inventario_actual["Clase"] == "Criptomonedas"]["Ticker"].tolist()
 
-# Ultra-fast Batch APIs call!
+# Ultra-fast Batch APIs call! (BVC stocks are offline/static so only US assets are batched)
 trm_dia, trm_yesterday, p_us, v_us = consultar_mercado_global_batch(us_active)
 p_cry, v_cry = consultar_mercado_cripto_batch(crypto_active)
 
-precios_maestros, valores_cop_maestros, variaciones_pct_maestras, variaciones_cop_maestras = [], [], [], []
+precios_maestros, precios_nativos, valores_cop_maestros, variaciones_pct_maestras, variaciones_cop_maestras = [], [], [], [], []
 efectos_mercado, efectos_divisa = [], []
 
 for idx, row in inventario_actual.iterrows():
     clase, ticker, cnt = row["Clase"], row["Ticker"], row["Cantidad"]
-    p_usd, v_cop, v_pct = 0.0, 0.0, 0.0
+    p_usd, precio_nativo, v_cop, v_pct = 0.0, 0.0, 0.0, 0.0
     var_cop = 0.0
     ef_mercado, ef_divisa = 0.0, 0.0
     
     if clase == "Acciones EEUU" or (clase == "Commodities (Oro)" and ticker == "GLD"):
         p_usd = p_us.get(ticker, row["Valor_Base_Fijo"])
+        precio_nativo = p_usd
         v_pct = v_us.get(ticker, 0.0)
         v_cop = cnt * p_usd * trm_dia
         
@@ -653,6 +702,7 @@ for idx, row in inventario_actual.iterrows():
         
     elif clase == "Criptomonedas":
         p_usd = p_cry.get(ticker, row["Valor_Base_Fijo"])
+        precio_nativo = p_usd
         v_pct = v_cry.get(ticker, 0.0)
         v_cop = cnt * p_usd * trm_dia
         
@@ -666,6 +716,7 @@ for idx, row in inventario_actual.iterrows():
         
     elif clase == "Liquidez USD":
         p_usd = row["Valor_Base_Fijo"]
+        precio_nativo = p_usd
         v_pct = 0.0
         v_cop = cnt * p_usd * trm_dia
         
@@ -678,26 +729,31 @@ for idx, row in inventario_actual.iterrows():
         
     elif clase in ["Acciones Colombia", "Inmobiliario Bursátil"]:
         precio_cop = row["Valor_Base_Fijo"]
-        v_pct = -0.12 # Variación por defecto
+        precio_nativo = precio_cop
+        v_pct = -0.12  # Variación diaria de simulación por defecto para BVC
         v_cop = cnt * precio_cop
         p_usd = precio_cop / trm_dia
         
-        v_cop_yesterday = v_cop / (1 + v_pct / 100)
+        # Variación diaria en COP calculada con su precio en bolsa
+        precio_cop_yesterday = precio_cop / (1 + v_pct / 100) if v_pct != -100 else precio_cop
+        v_cop_yesterday = cnt * precio_cop_yesterday
         var_cop = v_cop - v_cop_yesterday
         
-        # Activos locales no tienen afectación por TRM
+        # Activos locales no tienen afectación por TRM (todo es por mercado)
         ef_mercado = var_cop
         ef_divisa = 0.0
     else:
         # Activos fijos en COP (Liquidez COP, Fondos de Inversión, Propiedad Raíz)
         v_pct = 0.0
         v_cop = cnt * row["Valor_Base_Fijo"]
+        precio_nativo = row["Valor_Base_Fijo"]
         p_usd = v_cop / cnt / trm_dia if cnt > 0 else 0.0
         var_cop = 0.0
         ef_mercado = 0.0
         ef_divisa = 0.0
             
     precios_maestros.append(p_usd)
+    precios_nativos.append(precio_nativo)
     valores_cop_maestros.append(v_cop)
     variaciones_pct_maestras.append(v_pct)
     variaciones_cop_maestras.append(var_cop)
@@ -706,6 +762,7 @@ for idx, row in inventario_actual.iterrows():
 
 maestro_df = inventario_actual.copy()
 maestro_df["Precio_USD"] = precios_maestros
+maestro_df["Precio_Unitario"] = precios_nativos
 maestro_df["Total_COP"] = valores_cop_maestros
 maestro_df["% Var Diario"] = variaciones_pct_maestras
 maestro_df["Var COP"] = variaciones_cop_maestras
@@ -721,8 +778,6 @@ var_total_pct = (var_total_cop / (patrimonio_liquido - var_total_cop) * 100) if 
 efecto_mercado_total = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Ef_Mercado"].sum()
 efecto_divisa_total = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Ef_Divisa"].sum()
 
-df_cambio_clase = maestro_df.groupby("Clase")[["Var COP", "Total_COP"]].sum().reset_index()
-
 # -----------------------------------------------------------------------------
 # AUTO-RECTIFICACIÓN DEL HISTORIAL PATRIMONIAL EN DISCO
 # -----------------------------------------------------------------------------
@@ -735,6 +790,13 @@ def resolver_clase_bursatil_v5(c, t):
     return c
 
 maestro_df["Clase_Linea"] = maestro_df.apply(lambda r: resolver_clase_bursatil_v5(r["Clase"], r["Ticker"]), axis=1)
+
+df_cambio_clase = maestro_df.groupby("Clase_Linea")[["Var COP", "Total_COP"]].sum().reset_index()
+df_cambio_clase.rename(columns={"Clase_Linea": "Clase"}, inplace=True)
+
+orden_categorias = ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Cash Broker Desk", "Propiedad Raíz"]
+df_cambio_clase["sort_cat"] = df_cambio_clase["Clase"].apply(lambda x: orden_categorias.index(x) if x in orden_categorias else 99)
+df_cambio_clase = df_cambio_clase.sort_values("sort_cat").reset_index(drop=True)
 
 hoy_datetime = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
 
@@ -947,23 +1009,82 @@ with c_desc2:
 
 # DESGLOSE DE VARIACIÓN DIARIA
 st.markdown(f"<p style='color:var(--text-color); font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:8px; margin-top:16px; letter-spacing:0.5px;'>📊 DESGLOSE DE VARIACIÓN DIARIA POR CATEGORÍA DE ACTIVO</p>", unsafe_allow_html=True)
-df_cambio_clase_filtered = df_cambio_clase[df_cambio_clase["Clase"] != "Propiedad Raíz"]
-cols_breakdown = st.columns(len(df_cambio_clase_filtered))
+category_meta = {
+    "Acciones EEUU": {"emoji": "🇺🇸", "color": "#6366F1"},
+    "Acciones Colombia": {"emoji": "🇨🇴", "color": "#06B6D4"},
+    "Criptomonedas": {"emoji": "🪙", "color": "#F59E0B"},
+    "Commodities (Oro)": {"emoji": "🟡", "color": "#10B981"},
+    "Fondos de Inversión": {"emoji": "💼", "color": "#EC4899"},
+    "Cash Broker Desk": {"emoji": "💵", "color": "#8B5CF6"},
+    "Propiedad Raíz": {"emoji": "🏢", "color": "#94A3B8"}
+}
 
-for idx, r_clase in df_cambio_clase_filtered.reset_index(drop=True).iterrows():
+row1_data = df_cambio_clase.iloc[:4]
+row2_data = df_cambio_clase.iloc[4:]
+
+# Render Row 1: 4 columns
+cols_row1 = st.columns(4)
+for idx, r_clase in row1_data.reset_index(drop=True).iterrows():
     c_name = r_clase["Clase"]
     c_var = r_clase["Var COP"]
     c_tot = r_clase["Total_COP"]
     c_pct = (c_var / (c_tot - c_var) * 100) if (c_tot - c_var) > 0 else 0.0
     
-    with cols_breakdown[idx]:
-        indicator_arrow = "🟢" if c_var >= 0 else "🔴"
-        clase_color = "delta-positive" if c_var >= 0 else "delta-negative"
+    meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
+    
+    if c_var > 0.01:
+        indicator_arrow = "▲"
+        clase_color = "delta-positive"
+    elif c_var < -0.01:
+        indicator_arrow = "▼"
+        clase_color = "delta-negative"
+    else:
+        indicator_arrow = "▪"
+        clase_color = "delta-neutral"
+        
+    with cols_row1[idx]:
         st.markdown(f"""
-        <div class="breakdown-card">
-            <div class="breakdown-title">{c_name}</div>
-            <div class="breakdown-value">{indicator_arrow} ${c_var:,.0f}</div>
-            <div style="font-size:11px; font-weight:600; margin-top:2px;" class="{clase_color}">{c_pct:+.2f}%</div>
+        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 90px; padding: 10px 14px; margin-bottom: 8px;">
+            <div class="breakdown-title">{meta['emoji']} {c_name.upper()}</div>
+            <div class="breakdown-value" style="font-size: 15px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
+                ${c_tot:,.0f} <span style="font-size: 9px; color: var(--text-muted); font-weight: 500;">COP</span>
+            </div>
+            <div style="font-size: 10px; font-weight: 700; margin-top: 4px;">
+                Var: <span class="{clase_color}">{indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# Render Row 2: 3 columns
+cols_row2 = st.columns(3)
+for idx, r_clase in row2_data.reset_index(drop=True).iterrows():
+    c_name = r_clase["Clase"]
+    c_var = r_clase["Var COP"]
+    c_tot = r_clase["Total_COP"]
+    c_pct = (c_var / (c_tot - c_var) * 100) if (c_tot - c_var) > 0 else 0.0
+    
+    meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
+    
+    if c_var > 0.01:
+        indicator_arrow = "▲"
+        clase_color = "delta-positive"
+    elif c_var < -0.01:
+        indicator_arrow = "▼"
+        clase_color = "delta-negative"
+    else:
+        indicator_arrow = "▪"
+        clase_color = "delta-neutral"
+        
+    with cols_row2[idx]:
+        st.markdown(f"""
+        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 90px; padding: 10px 14px; margin-bottom: 8px;">
+            <div class="breakdown-title">{meta['emoji']} {c_name.upper()}</div>
+            <div class="breakdown-value" style="font-size: 15px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
+                ${c_tot:,.0f} <span style="font-size: 9px; color: var(--text-muted); font-weight: 500;">COP</span>
+            </div>
+            <div style="font-size: 10px; font-weight: 700; margin-top: 4px;">
+                Var: <span class="{clase_color}">{indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -983,23 +1104,25 @@ with tab_cuadro:
     
     with col_donut_izq:
         st.markdown("<div style='text-align:center; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:5px;'>DISTRIBUCIÓN TOTAL DE ACTIVOS (INCLUYE PROPIEDAD RAÍZ)</div>", unsafe_allow_html=True)
-        df_peso_total = maestro_df.groupby("Clase")["Total_COP"].sum().reset_index()
+        df_peso_total = maestro_df.groupby("Clase_Linea")["Total_COP"].sum().reset_index().rename(columns={"Clase_Linea": "Clase"})
         fig_donut_total = px.pie(df_peso_total, names="Clase", values="Total_COP", hole=0.5, color_discrete_sequence=PALETA_GRAFICOS)
         fig_donut_total.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=15, b=15, l=10, r=10), height=360,
-            legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5, font=dict(size=10, color=TEXT_COLOR))
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=340,
+            legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
+            font=dict(family="Inter, system-ui")
         )
-        st.plotly_chart(fig_donut_total, use_container_width=True)
+        st.plotly_chart(fig_donut_total, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
         
     with col_donut_der:
         st.markdown("<div style='text-align:center; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:5px;'>DISTRIBUCIÓN DE PORTAFOLIO LÍQUIDO (EXCLUYE PROPIEDAD RAÍZ)</div>", unsafe_allow_html=True)
-        df_peso_liquido = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"].groupby("Clase")["Total_COP"].sum().reset_index()
+        df_peso_liquido = maestro_df[maestro_df["Clase_Linea"] != "Propiedad Raíz"].groupby("Clase_Linea")["Total_COP"].sum().reset_index().rename(columns={"Clase_Linea": "Clase"})
         fig_donut_liquido = px.pie(df_peso_liquido, names="Clase", values="Total_COP", hole=0.5, color_discrete_sequence=PALETA_GRAFICOS)
         fig_donut_liquido.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=15, b=15, l=10, r=10), height=360,
-            legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5, font=dict(size=10, color=TEXT_COLOR))
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=340,
+            legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
+            font=dict(family="Inter, system-ui")
         )
-        st.plotly_chart(fig_donut_liquido, use_container_width=True)
+        st.plotly_chart(fig_donut_liquido, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -1020,12 +1143,20 @@ with tab_cuadro:
     
     fig_linea_total = go.Figure()
     
-    # RECTIFICACIÓN CLAVE: Eliminado 'shape=hv' para dibujar curvas de tendencia fluidas y elegantes
+    # 1. Trazo de brillo de línea (glowing neon stroke)
+    fig_linea_total.add_trace(go.Scatter(
+        x=df_total_diario["Fecha"], y=df_total_diario["Valor_COP"],
+        mode="lines", name="Guía",
+        line=dict(color=PALETA_GRAFICOS[0], width=7),
+        opacity=0.18, showlegend=False, hoverinfo="skip"
+    ))
+    
+    # 2. Trazo principal con relleno degradado de opacidad ultra baja
     fig_linea_total.add_trace(go.Scatter(
         x=df_total_diario["Fecha"], y=df_total_diario["Valor_COP"],
         mode="lines", name="Patrimonio Líquido",
         line=dict(color=PALETA_GRAFICOS[0], width=2.5),
-        fill='tozeroy', fillcolor="rgba(99, 102, 241, 0.05)" if modo_oscuro else "rgba(79, 70, 229, 0.03)"
+        fill='tozeroy', fillcolor="rgba(99, 102, 241, 0.04)" if modo_oscuro else "rgba(79, 70, 229, 0.02)"
     ))
     
     if not df_total_diario.empty:
@@ -1034,16 +1165,38 @@ with tab_cuadro:
         else:
             pad = (v_max - v_min) * 0.012
             limites_y = [v_min - pad, v_max + pad]
-    else: limites_y = None
+            
+        x_min, x_max = df_total_diario["Fecha"].min(), df_total_diario["Fecha"].max()
+        duration_x = x_max - x_min
+        if duration_x == timedelta(0):
+            pad_x_left = timedelta(days=1)
+            pad_x_right = timedelta(days=1)
+        else:
+            pad_x_left = duration_x * 0.02
+            pad_x_right = duration_x * 0.055
+        limites_x = [
+            (x_min - pad_x_left).strftime("%Y-%m-%d"),
+            (x_max + pad_x_right).strftime("%Y-%m-%d")
+        ]
+    else: 
+        limites_y = None
+        limites_x = None
+
+    st.markdown(f"""
+    <div style="margin-top: 10px; margin-bottom: 12px; padding-left: 5px;">
+        <span style="font-size: 13px; font-weight: 700; color: var(--text-color); display: block; margin-bottom: 2px;">Evolución del Patrimonio Líquido</span>
+        <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Balance Consolidado: ${patrimonio_liquido:,.0f} COP</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     fig_linea_total.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=400, hovermode="x unified",
-        margin=dict(t=40, b=25, l=85, r=10),
-        title=dict(text=f"Evolución Temporal de Saldos Consolidados Financieros — Bal Actual: ${patrimonio_liquido:,.0f} COP", font=dict(size=13, color=TEXT_COLOR)),
-        xaxis=dict(type='date', showgrid=False, tickformat="%d-%m", tickfont=dict(color=TEXT_COLOR)),
-        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, autorange=False, range=limites_y, tickfont=dict(size=9, color=TEXT_COLOR), tickformat="$,.0f")
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=350, hovermode="x unified",
+        margin=dict(t=15, b=30, l=65, r=40), showlegend=False,
+        xaxis=dict(type='date', range=limites_x, showgrid=False, tickformat="%d-%m", tickfont=dict(size=10, color=TEXT_MUTED)),
+        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=limites_y, tickfont=dict(size=9, color=TEXT_MUTED), tickformat="$,.0f"),
+        font=dict(family="Inter, system-ui, sans-serif")
     )
-    st.plotly_chart(fig_linea_total, use_container_width=True)
+    st.plotly_chart(fig_linea_total, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -1064,22 +1217,51 @@ with tab_cuadro:
                     s_min, s_max = float(df_sub["Valor_COP"].min()), float(df_sub["Valor_COP"].max())
                     s_pad = (s_max - s_min) * 0.012 if s_max != s_min else s_max * 0.01
                     
+                    s_min_x, s_max_x = df_sub["Fecha"].min(), df_sub["Fecha"].max()
+                    duration_s_x = s_max_x - s_min_x
+                    if duration_s_x == timedelta(0):
+                        pad_s_x_left = timedelta(days=1)
+                        pad_s_x_right = timedelta(days=1)
+                    else:
+                        pad_s_x_left = duration_s_x * 0.02
+                        pad_s_x_right = duration_s_x * 0.055
+                    limites_s_x = [
+                        (s_min_x - pad_s_x_left).strftime("%Y-%m-%d"),
+                        (s_max_x + pad_s_x_right).strftime("%Y-%m-%d")
+                    ]
+                    
                     fig_ind = go.Figure()
                     
-                    # RECTIFICACIÓN CLAVE: Eliminado 'shape=hv' en todas las gráficas para mostrar líneas continuas
+                    # 1. Trazo de brillo de línea (glowing neon stroke)
                     fig_ind.add_trace(go.Scatter(
                         x=df_sub["Fecha"], y=df_sub["Valor_COP"], mode="lines",
+                        line=dict(color=PALETA_GRAFICOS[(i + sub_idx) % len(PALETA_GRAFICOS)], width=7),
+                        opacity=0.18, showlegend=False, hoverinfo="skip"
+                    ))
+                    
+                    # 2. Trazo principal continuo
+                    fig_ind.add_trace(go.Scatter(
+                        x=df_sub["Fecha"], y=df_sub["Valor_COP"], mode="lines",
+                        name=c_name,
                         line=dict(color=PALETA_GRAFICOS[(i + sub_idx) % len(PALETA_GRAFICOS)], width=2.5),
                         fill='tozeroy', fillcolor="rgba(99, 102, 241, 0.01)"
                     ))
+                    
+                    st.markdown(f"""
+                    <div style="margin-top: 10px; margin-bottom: 6px; padding-left: 5px;">
+                        <span style="font-size: 12px; font-weight: 700; color: var(--text-color); display: block; margin-bottom: 1px;">{c_name.upper()}</span>
+                        <span style="font-size: 10px; font-weight: 600; color: var(--text-muted);">Balance: ${val_grupo_fiel:,.0f} COP</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
                     fig_ind.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=270,
-                        title=dict(text=f"<b>{c_name.upper()}</b><br><span style='font-size:12px; color:{TEXT_MUTED}; font-weight:600;'>Balance: ${val_grupo_fiel:,.0f} COP</span>", font=dict(size=12, color=TEXT_COLOR)),
-                        margin=dict(t=55, b=25, l=85, r=20),
-                        xaxis=dict(type='date', showgrid=False, tickformat="%d-%m", tickfont=dict(color=TEXT_COLOR)),
-                        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, autorange=False, range=[s_min - s_pad, s_max + s_pad], showticklabels=True, tickfont=dict(size=9, color=TEXT_COLOR), tickformat="$,.0f")
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=220,
+                        margin=dict(t=10, b=25, l=65, r=40), showlegend=False,
+                        xaxis=dict(type='date', range=limites_s_x, showgrid=False, tickformat="%d-%m", tickfont=dict(size=9, color=TEXT_MUTED)),
+                        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=[s_min - s_pad, s_max + s_pad], showticklabels=True, tickfont=dict(size=8, color=TEXT_MUTED), tickformat="$,.0f"),
+                        font=dict(family="Inter, system-ui, sans-serif")
                     )
-                    st.plotly_chart(fig_ind, use_container_width=True)
+                    st.plotly_chart(fig_ind, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
 
 # -----------------------------------------------------------------------------
 # TAB 2: BOOK OF RECORDS & OPERATIONS
@@ -1095,11 +1277,19 @@ with tab_records:
             return "color: #EF4444; font-weight: 700;"
         return "color: #9CA3AF;"
         
-    df_mostrar = maestro_df[["Ticker", "Clase", "Cantidad", "Moneda", "Precio_USD", "Total_COP", "% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"]].copy()
+    df_mostrar = maestro_df[["Ticker", "Clase", "Cantidad", "Moneda", "Precio_Unitario", "Total_COP", "% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"]].copy()
+    
+    # Formatear el precio unitario dinámicamente según la moneda del activo (COP o USD)
+    df_mostrar["Precio Unitario"] = df_mostrar.apply(
+        lambda r: f"${r['Precio_Unitario']:,.2f} USD" if r["Moneda"] == "USD" else f"${r['Precio_Unitario']:,.0f} COP",
+        axis=1
+    )
+    
+    # Reordenar columnas para posicionar 'Precio Unitario'
+    df_mostrar = df_mostrar[["Ticker", "Clase", "Cantidad", "Moneda", "Precio Unitario", "Total_COP", "% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"]]
     
     styler = df_mostrar.style.format({
         "Cantidad": "{:,.4f}", 
-        "Precio_USD": "${:,.2f}", 
         "Total_COP": "${:,.0f} COP",
         "% Var Diario": lambda x: f"▲ {x:+.2f}%" if x > 0.001 else (f"▼ {x:+.2f}%" if x < -0.001 else f"  {x:+.2f}%"),
         "Var COP": lambda x: f"▲ ${x:,.0f} COP" if x > 0.001 else (f"▼ ${abs(x):,.0f} COP" if x < -0.001 else f"  ${x:,.0f} COP"),
