@@ -38,10 +38,10 @@ def inicializar_archivos_disco():
             {"Ticker": "V", "Clase": "Acciones EEUU", "Cantidad": 9.10111, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
             {"Ticker": "MSFT", "Clase": "Acciones EEUU", "Cantidad": 10.84953, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
             {"Ticker": "GLD", "Clase": "Commodities (Oro)", "Cantidad": 48.53481, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-            {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 71600.0, "Moneda": "COP"},
-            {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 13660.0, "Moneda": "COP"},
+            {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 75760.0, "Moneda": "COP"},
+            {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 15500.0, "Moneda": "COP"},
             {"Ticker": "PFGRUPOARG", "Clase": "Acciones Colombia", "Cantidad": 2199.0, "Valor_Base_Fijo": 11500.0, "Moneda": "COP"},
-            {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 53250.0, "Moneda": "COP"},
+            {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 52244.0, "Moneda": "COP"},
             {"Ticker": "PEI", "Clase": "Acciones Colombia", "Cantidad": 388.0, "Valor_Base_Fijo": 62000.0, "Moneda": "COP"},
             {"Ticker": "BTC", "Clase": "Criptomonedas", "Cantidad": 0.13078689, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
             {"Ticker": "ETH", "Clase": "Criptomonedas", "Cantidad": 0.57562952, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
@@ -121,9 +121,16 @@ def cargar_inventario():
                             "Clase" VARCHAR(100),
                             "Cantidad" DOUBLE PRECISION,
                             "Valor_Base_Fijo" DOUBLE PRECISION,
-                            "Moneda" VARCHAR(10)
+                            "Moneda" VARCHAR(10),
+                            "Var_Manual" DOUBLE PRECISION DEFAULT 0.0
                         )
                     """)
+                    
+                    # Garantizar que la columna exista en bases de datos ya creadas
+                    try:
+                        conn.exec_driver_sql('ALTER TABLE inventario_activos ADD COLUMN IF NOT EXISTS "Var_Manual" DOUBLE PRECISION DEFAULT 0.0')
+                    except Exception:
+                        pass
                     
                     # Comprobar si está vacía
                     count = conn.exec_driver_sql("SELECT COUNT(*) FROM inventario_activos").scalar()
@@ -135,10 +142,10 @@ def cargar_inventario():
                             {"Ticker": "V", "Clase": "Acciones EEUU", "Cantidad": 9.10111, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
                             {"Ticker": "MSFT", "Clase": "Acciones EEUU", "Cantidad": 10.84953, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
                             {"Ticker": "GLD", "Clase": "Commodities (Oro)", "Cantidad": 48.53481, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 71600.0, "Moneda": "COP"},
-                            {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 13660.0, "Moneda": "COP"},
+                            {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 75760.0, "Moneda": "COP"},
+                            {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 15500.0, "Moneda": "COP"},
                             {"Ticker": "PFGRUPOARG", "Clase": "Acciones Colombia", "Cantidad": 2199.0, "Valor_Base_Fijo": 11500.0, "Moneda": "COP"},
-                            {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 53250.0, "Moneda": "COP"},
+                            {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 52244.0, "Moneda": "COP"},
                             {"Ticker": "PEI", "Clase": "Acciones Colombia", "Cantidad": 388.0, "Valor_Base_Fijo": 62000.0, "Moneda": "COP"},
                             {"Ticker": "BTC", "Clase": "Criptomonedas", "Cantidad": 0.13078689, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
                             {"Ticker": "ETH", "Clase": "Criptomonedas", "Cantidad": 0.57562952, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
@@ -222,6 +229,25 @@ inicializar_archivos_disco()
 
 if 'inventario_activos_core' not in st.session_state:
     st.session_state['inventario_activos_core'] = cargar_inventario()
+
+# AUTO-MIGRACIÓN: ACTUALIZAR COTIZACIONES DE BVC DE REFERENCIA (ÚLTIMO CIERRE OFICIAL DE MAYO 2026)
+migracion_hecha = False
+for idx, row in st.session_state['inventario_activos_core'].iterrows():
+    t = row["Ticker"]
+    val_actual = row["Valor_Base_Fijo"]
+    
+    if t == "CIBEST" and val_actual == 71600.0:
+        st.session_state['inventario_activos_core'].at[idx, "Valor_Base_Fijo"] = 75760.0
+        migracion_hecha = True
+    elif t == "GRUPOARGOS" and val_actual == 13660.0:
+        st.session_state['inventario_activos_core'].at[idx, "Valor_Base_Fijo"] = 15500.0
+        migracion_hecha = True
+    elif t == "GXTESCOL" and val_actual == 53250.0:
+        st.session_state['inventario_activos_core'].at[idx, "Valor_Base_Fijo"] = 52244.0
+        migracion_hecha = True
+
+if migracion_hecha:
+    guardar_inventario(st.session_state['inventario_activos_core'])
 
 # Initialize top bar controls in session state if not present
 if "dark_mode_state" not in st.session_state:
@@ -335,10 +361,55 @@ st.markdown(f"""
     div[data-testid="stSelectbox"] label,
     div[data-testid="stNumberInput"] label,
     div[data-testid="stTextInput"] label,
+    div[data-testid="stExpander"] details summary p,
+    div[data-testid="stExpander"] details summary span,
     .stMarkdown p,
     .stSubheader p {{
         color: var(--text-color) !important;
         font-weight: 700 !important;
+    }}
+    
+    /* Forzar visibilidad de textos generales en markdown y listas */
+    div[data-testid="stMarkdownContainer"] p, 
+    div[data-testid="stMarkdownContainer"] span, 
+    div[data-testid="stMarkdownContainer"] li,
+    div[data-testid="stMarkdownContainer"] ul,
+    div[data-testid="stMarkdownContainer"] ol,
+    div[data-testid="stMarkdownContainer"] strong,
+    div[data-testid="stMarkdownContainer"] em,
+    div[data-testid="stMarkdownContainer"] code {{
+        color: var(--text-color) !important;
+    }}
+    
+    /* Forzar visibilidad de títulos de expanders y flechas indicadoras */
+    div[data-testid="stExpander"] details summary {{
+        color: var(--text-color) !important;
+    }}
+    div[data-testid="stExpander"] details summary svg {{
+        fill: var(--text-color) !important;
+        color: var(--text-color) !important;
+    }}
+    
+    /* Estilos Premium para inputs, cajas de texto y selectores */
+    input, 
+    textarea, 
+    select,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="input"] input {{
+        background-color: var(--card-bg) !important;
+        color: var(--text-color) !important;
+        border-color: var(--border-color) !important;
+    }}
+    
+    /* Menús desplegables de selectbox y listas de opciones */
+    div[role="listbox"],
+    div[role="listbox"] li,
+    div[role="listbox"] div,
+    div[role="option"],
+    div[role="option"] span {{
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
     }}
     
     /* Ajustes específicos para que los labels de los radio buttons resalten perfectamente */
@@ -403,12 +474,21 @@ st.markdown(f"""
         white-space: nowrap;
     }}
     
+    div[data-testid="stMarkdownContainer"] .delta-positive,
+    div[data-testid="stMarkdownContainer"] span.delta-positive,
+    div[data-testid="stMarkdownContainer"] p.delta-positive,
     .delta-positive {{
         color: #10B981 !important;
     }}
+    div[data-testid="stMarkdownContainer"] .delta-negative,
+    div[data-testid="stMarkdownContainer"] span.delta-negative,
+    div[data-testid="stMarkdownContainer"] p.delta-negative,
     .delta-negative {{
         color: #EF4444 !important;
     }}
+    div[data-testid="stMarkdownContainer"] .delta-neutral,
+    div[data-testid="stMarkdownContainer"] span.delta-neutral,
+    div[data-testid="stMarkdownContainer"] p.delta-neutral,
     .delta-neutral {{
         color: var(--text-muted) !important;
     }}
@@ -551,6 +631,166 @@ st.markdown(f"""
         }}
         .breakdown-value {{
             font-size: 15px !important;
+        }}
+    }}
+    
+    /* Barra de Exposición Cambiaria (USD vs COP) - POTENCIADA */
+    .currency-bar-container-pro {{
+        width: 100%;
+        height: 26px;
+        background: rgba(148, 163, 184, 0.1);
+        border-radius: 13px;
+        overflow: hidden;
+        display: flex;
+        margin-top: 14px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border-color);
+        box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.25);
+    }}
+    .currency-bar-fill-usd-pro {{
+        background: linear-gradient(90deg, #6366F1, #06B6D4);
+        height: 100%;
+        transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #FFFFFF !important;
+        font-size: 11px;
+        font-weight: 900;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+    }}
+    .currency-bar-fill-cop-pro {{
+        background: linear-gradient(90deg, #10B981, #0EA5E9);
+        height: 100%;
+        transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #FFFFFF !important;
+        font-size: 11px;
+        font-weight: 900;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+    }}
+    .currency-label-row-pro {{
+        display: flex;
+        gap: 15px;
+        width: 100%;
+        margin-top: 4px;
+        margin-bottom: 15px;
+    }}
+    .currency-exposure-card {{
+        flex: 1;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 10px 14px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 60px;
+    }}
+    .currency-exposure-card.usd {{
+        border-left: 4px solid #06B6D4;
+    }}
+    .currency-exposure-card.cop {{
+        border-left: 4px solid #10B981;
+    }}
+    .currency-exposure-title {{
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--text-muted) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }}
+    .currency-exposure-value {{
+        font-size: 15px !important;
+        font-weight: 800;
+        color: var(--text-color) !important;
+        margin-top: 3px;
+    }}
+
+    /* Tarjetas de Riesgo Premium y Super Grandes (DISEÑO INSTITUCIONAL) */
+    .pro-risk-card {{
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 18px 20px;
+        box-shadow: var(--shadow);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        min-height: 145px;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }}
+    .pro-risk-card:hover {{
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--primary-glow);
+    }}
+    .pro-risk-card::before {{
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+    }}
+    .pro-risk-card.volatility::before {{
+        background: linear-gradient(90deg, #F59E0B, #EC4899);
+    }}
+    .pro-risk-card.efficiency::before {{
+        background: linear-gradient(90deg, #6366F1, #06B6D4);
+    }}
+    .pro-risk-card.drawdown::before {{
+        background: linear-gradient(90deg, #EF4444, #F59E0B);
+    }}
+    .pro-risk-title {{
+        font-size: 10px;
+        font-weight: 800;
+        color: var(--text-muted) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+    }}
+    .pro-risk-value {{
+        font-size: clamp(23px, 2.2vw, 30px) !important;
+        font-weight: 900;
+        color: var(--text-color) !important;
+        margin: 6px 0;
+        line-height: 1.1;
+        letter-spacing: -0.5px;
+    }}
+    .pro-risk-badge-row {{
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 4px;
+    }}
+    
+    @media (max-width: 768px) {{
+        .currency-label-row-pro {{
+            flex-direction: column !important;
+            gap: 8px !important;
+        }}
+        .currency-exposure-card {{
+            min-height: auto !important;
+            padding: 8px 12px !important;
+        }}
+        .pro-risk-card {{
+            min-height: auto !important;
+            padding: 14px 16px !important;
+        }}
+        .pro-risk-value {{
+            font-size: 24px !important;
         }}
     }}
     </style>
@@ -730,7 +970,7 @@ for idx, row in inventario_actual.iterrows():
     elif clase in ["Acciones Colombia", "Inmobiliario Bursátil"]:
         precio_cop = row["Valor_Base_Fijo"]
         precio_nativo = precio_cop
-        v_pct = -0.12  # Variación diaria de simulación por defecto para BVC
+        v_pct = float(row["Var_Manual"]) if "Var_Manual" in row and not pd.isna(row["Var_Manual"]) else 0.0
         v_cop = cnt * precio_cop
         p_usd = precio_cop / trm_dia
         
@@ -771,6 +1011,14 @@ maestro_df["Ef_Divisa"] = efectos_divisa
 
 patrimonio_total = maestro_df["Total_COP"].sum()
 patrimonio_liquido = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Total_COP"].sum()
+
+# Cálculo de Exposición Cambiaria (USD vs COP) - Excluyendo Propiedad Raíz
+expo_usd_cop = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"].groupby("Moneda")["Total_COP"].sum().to_dict()
+val_usd_total_cop = expo_usd_cop.get("USD", 0.0)
+val_cop_total_cop = expo_usd_cop.get("COP", 0.0)
+
+pct_usd_exposure = (val_usd_total_cop / patrimonio_liquido * 100) if patrimonio_liquido > 0 else 0.0
+pct_cop_exposure = (val_cop_total_cop / patrimonio_liquido * 100) if patrimonio_liquido > 0 else 0.0
 var_total_cop = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Var COP"].sum()
 var_total_pct = (var_total_cop / (patrimonio_liquido - var_total_cop) * 100) if (patrimonio_liquido - var_total_cop) > 0 else 0.0
 
@@ -1034,23 +1282,28 @@ for idx, r_clase in row1_data.reset_index(drop=True).iterrows():
     
     if c_var > 0.01:
         indicator_arrow = "▲"
-        clase_color = "delta-positive"
+        clase_color = "#10B981"  # Verde esmeralda
+        color_class = "delta-positive"
     elif c_var < -0.01:
         indicator_arrow = "▼"
-        clase_color = "delta-negative"
+        clase_color = "#EF4444"  # Rojo carmesí
+        color_class = "delta-negative"
     else:
         indicator_arrow = "▪"
-        clase_color = "delta-neutral"
+        clase_color = "#9CA3AF"  # Gris neutral
+        color_class = "delta-neutral"
         
     with cols_row1[idx]:
         st.markdown(f"""
-        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 90px; padding: 10px 14px; margin-bottom: 8px;">
-            <div class="breakdown-title">{meta['emoji']} {c_name.upper()}</div>
-            <div class="breakdown-value" style="font-size: 15px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
-                ${c_tot:,.0f} <span style="font-size: 9px; color: var(--text-muted); font-weight: 500;">COP</span>
+        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 105px; padding: 12px 16px; margin-bottom: 8px;">
+            <div class="breakdown-title" style="font-size: 11px; font-weight: 800;">{meta['emoji']} {c_name.upper()}</div>
+            <div class="breakdown-value" style="font-size: 18px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
+                ${c_tot:,.0f} <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">COP</span>
             </div>
-            <div style="font-size: 10px; font-weight: 700; margin-top: 4px;">
-                Var: <span class="{clase_color}">{indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)</span>
+            <div style="font-size: 12.5px; font-weight: 800; margin-top: 5px;">
+                <span class="{color_class}" style="color: {clase_color} !important;">
+                    Var: {indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)
+                </span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1067,23 +1320,28 @@ for idx, r_clase in row2_data.reset_index(drop=True).iterrows():
     
     if c_var > 0.01:
         indicator_arrow = "▲"
-        clase_color = "delta-positive"
+        clase_color = "#10B981"  # Verde esmeralda
+        color_class = "delta-positive"
     elif c_var < -0.01:
         indicator_arrow = "▼"
-        clase_color = "delta-negative"
+        clase_color = "#EF4444"  # Rojo carmesí
+        color_class = "delta-negative"
     else:
         indicator_arrow = "▪"
-        clase_color = "delta-neutral"
+        clase_color = "#9CA3AF"  # Gris neutral
+        color_class = "delta-neutral"
         
     with cols_row2[idx]:
         st.markdown(f"""
-        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 90px; padding: 10px 14px; margin-bottom: 8px;">
-            <div class="breakdown-title">{meta['emoji']} {c_name.upper()}</div>
-            <div class="breakdown-value" style="font-size: 15px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
-                ${c_tot:,.0f} <span style="font-size: 9px; color: var(--text-muted); font-weight: 500;">COP</span>
+        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 105px; padding: 12px 16px; margin-bottom: 8px;">
+            <div class="breakdown-title" style="font-size: 11px; font-weight: 800;">{meta['emoji']} {c_name.upper()}</div>
+            <div class="breakdown-value" style="font-size: 18px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
+                ${c_tot:,.0f} <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">COP</span>
             </div>
-            <div style="font-size: 10px; font-weight: 700; margin-top: 4px;">
-                Var: <span class="{clase_color}">{indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)</span>
+            <div style="font-size: 12.5px; font-weight: 800; margin-top: 5px;">
+                <span class="{color_class}" style="color: {clase_color} !important;">
+                    Var: {indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)
+                </span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1107,7 +1365,7 @@ with tab_cuadro:
         df_peso_total = maestro_df.groupby("Clase_Linea")["Total_COP"].sum().reset_index().rename(columns={"Clase_Linea": "Clase"})
         fig_donut_total = px.pie(df_peso_total, names="Clase", values="Total_COP", hole=0.5, color_discrete_sequence=PALETA_GRAFICOS)
         fig_donut_total.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=340,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=380,
             legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
             font=dict(family="Inter, system-ui")
         )
@@ -1118,7 +1376,7 @@ with tab_cuadro:
         df_peso_liquido = maestro_df[maestro_df["Clase_Linea"] != "Propiedad Raíz"].groupby("Clase_Linea")["Total_COP"].sum().reset_index().rename(columns={"Clase_Linea": "Clase"})
         fig_donut_liquido = px.pie(df_peso_liquido, names="Clase", values="Total_COP", hole=0.5, color_discrete_sequence=PALETA_GRAFICOS)
         fig_donut_liquido.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=340,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=380,
             legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
             font=dict(family="Inter, system-ui")
         )
@@ -1190,13 +1448,201 @@ with tab_cuadro:
     """, unsafe_allow_html=True)
 
     fig_linea_total.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=350, hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=460, hovermode="x unified",
         margin=dict(t=15, b=30, l=65, r=40), showlegend=False,
         xaxis=dict(type='date', range=limites_x, showgrid=False, tickformat="%d-%m", tickfont=dict(size=10, color=TEXT_MUTED)),
         yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=limites_y, tickfont=dict(size=9, color=TEXT_MUTED), tickformat="$,.0f"),
         font=dict(family="Inter, system-ui, sans-serif")
     )
     st.plotly_chart(fig_linea_total, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
+
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    with st.expander("🛡️ DIAGNÓSTICO PROFESIONAL DE RIESGO & EXPOSICIÓN CAMBIARIA", expanded=True):
+        # 1. Composición Cambiaria
+        st.markdown(f"<div style='font-size: 13px; font-weight: 700; color: var(--text-color); margin-bottom: 6px;'>📊 ESTRUCTURA CAMBIARIA DEL PATRIMONIO (Exposición por Divisa)</div>", unsafe_allow_html=True)
+        
+        usd_value_converted = val_usd_total_cop / trm_dia
+        
+        st.markdown(f"""
+        <div class="currency-bar-container-pro">
+            <div class="currency-bar-fill-usd-pro" style="width: {pct_usd_exposure:.1f}%;">
+                {pct_usd_exposure:.1f}% USD
+            </div>
+            <div class="currency-bar-fill-cop-pro" style="width: {pct_cop_exposure:.1f}%;">
+                {pct_cop_exposure:.1f}% COP
+            </div>
+        </div>
+        <div class="currency-label-row-pro">
+            <div class="currency-exposure-card usd">
+                <div class="currency-exposure-title">🇺🇸 Activos Nominados en Dólares (USD)</div>
+                <div class="currency-exposure-value">${val_usd_total_cop:,.0f} COP <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">(${usd_value_converted:,.2f} USD)</span></div>
+            </div>
+            <div class="currency-exposure-card cop">
+                <div class="currency-exposure-title">🇨🇴 Activos Nominados en Pesos (COP)</div>
+                <div class="currency-exposure-value">${val_cop_total_cop:,.0f} COP</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<div style='margin-bottom: 15px; border-bottom: 1px solid var(--border-color);'></div>", unsafe_allow_html=True)
+        
+        # 2. Métricas Financieras Cuantitativas
+        st.markdown(f"<div style='font-size: 13px; font-weight: 700; color: var(--text-color); margin-bottom: 12px;'>⚡ DIAGNÓSTICO DE VOLATILIDAD, EFICIENCIA Y PEOR CAÍDA</div>", unsafe_allow_html=True)
+        
+        vol_anual = 0.0
+        cagr_ret = 0.0
+        sharpe = 0.0
+        sortino = 0.0
+        max_drawdown = 0.0
+        peak_val = 0.0
+        peak_date = "N/A"
+        valley_date = "N/A"
+        
+        if len(df_total_diario) >= 3:
+            try:
+                df_calc = df_total_diario.sort_values("Fecha").copy()
+                df_calc["Returns"] = df_calc["Valor_COP"].pct_change()
+                
+                # Annualized Volatility
+                std_daily = df_calc["Returns"].std()
+                vol_anual = std_daily * (365 ** 0.5) * 100
+                
+                # Annualized Return (CAGR)
+                v_ini = float(df_calc["Valor_COP"].iloc[0])
+                v_fin = float(df_calc["Valor_COP"].iloc[-1])
+                date_diff = df_calc["Fecha"].iloc[-1] - df_calc["Fecha"].iloc[0]
+                days = date_diff.days
+                
+                if days > 2 and v_ini > 0 and v_fin > 0:
+                    cagr_ret = ((v_fin / v_ini) ** (365.0 / days) - 1.0) * 100
+                else:
+                    cagr_ret = df_calc["Returns"].mean() * 365 * 100
+                    
+                # Sharpe Ratio (Tasa libre de riesgo 8% anual)
+                r_free = 8.0
+                if vol_anual > 0.01:
+                    sharpe = (cagr_ret - r_free) / vol_anual
+                else:
+                    sharpe = 0.0
+                    
+                # Sortino Ratio
+                neg_returns = df_calc[df_calc["Returns"] < 0]["Returns"]
+                if len(neg_returns) >= 2:
+                    std_downside = neg_returns.std() * (365 ** 0.5) * 100
+                    if std_downside > 0.01:
+                        sortino = (cagr_ret - r_free) / std_downside
+                    else:
+                        sortino = 0.0
+                else:
+                    sortino = sharpe
+                    
+                # Max Drawdown calculation
+                df_calc["Peak"] = df_calc["Valor_COP"].cummax()
+                df_calc["Drawdown"] = (df_calc["Valor_COP"] - df_calc["Peak"]) / df_calc["Peak"] * 100
+                max_drawdown = df_calc["Drawdown"].min()
+                
+                # Find dates
+                valley_row = df_calc[df_calc["Drawdown"] == max_drawdown].iloc[0]
+                valley_date = valley_row["Fecha"].strftime("%d-%b-%Y")
+                
+                peak_row = df_calc[df_calc["Fecha"] <= valley_row["Fecha"]].sort_values("Valor_COP", ascending=False).iloc[0]
+                peak_date = peak_row["Fecha"].strftime("%d-%b-%Y")
+                peak_val = peak_row["Valor_COP"]
+                
+            except Exception:
+                vol_anual, sharpe, sortino, max_drawdown = 0.0, 0.0, 0.0, 0.0
+        
+        # Color coding risk
+        if vol_anual < 0.01:
+            vol_desc = "N/A (Datos Insuficientes)"
+            vol_color = "delta-neutral"
+            vol_indicator = "▪"
+        elif vol_anual < 8.0:
+            vol_desc = "Riesgo Bajo (Conservador 🛡️)"
+            vol_color = "delta-positive"
+            vol_indicator = "🟢"
+        elif vol_anual < 15.0:
+            vol_desc = "Riesgo Moderado (Balanceado ⚖️)"
+            vol_color = "delta-neutral"
+            vol_indicator = "🟡"
+        else:
+            vol_desc = "Riesgo Alto (Agresivo ⚡)"
+            vol_color = "delta-negative"
+            vol_indicator = "🔴"
+            
+        # Color coding Sharpe & Sortino
+        if len(df_total_diario) < 3:
+            eff_desc = "N/A"
+            eff_color = "delta-neutral"
+            eff_indicator = "▪"
+        elif sortino > 1.5:
+            eff_desc = "Excelente Eficiencia (Retorno/Riesgo Óptimo 🏆)"
+            eff_color = "delta-positive"
+            eff_indicator = "🟢"
+        elif sortino > 0.75:
+            eff_desc = "Buena Eficiencia (Portafolio Rentable 📈)"
+            eff_color = "delta-positive"
+            eff_indicator = "🟢"
+        elif sortino >= 0.0:
+            eff_desc = "Eficiencia Aceptable (Rendimiento Positivo ⚖️)"
+            eff_color = "delta-neutral"
+            eff_indicator = "🟡"
+        else:
+            eff_desc = "Eficiencia Deficiente (Retorno menor que tasa segura ⚠️)"
+            eff_color = "delta-negative"
+            eff_indicator = "🔴"
+            
+        if len(df_total_diario) >= 3:
+            c_risk1, c_risk2, c_risk3 = st.columns(3)
+            
+            with c_risk1:
+                st.markdown(f"""
+                <div class="pro-risk-card volatility">
+                    <div class="pro-risk-title">📈 VOLATILIDAD ANUALIZADA</div>
+                    <div class="pro-risk-value">
+                        {vol_anual:.2f}%
+                    </div>
+                    <div class="pro-risk-badge-row {vol_color}">
+                        <span>{vol_indicator}</span>
+                        <span>{vol_desc}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c_risk2:
+                st.markdown(f"""
+                <div class="pro-risk-card efficiency">
+                    <div class="pro-risk-title">⚖️ CALIFICACIÓN RETORNO/RIESGO</div>
+                    <div class="pro-risk-value" style="font-size: clamp(19px, 1.8vw, 24px) !important;">
+                        Sortino: {sortino:+.2f} <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">(Sharpe: {sharpe:+.2f})</span>
+                    </div>
+                    <div class="pro-risk-badge-row {eff_color}">
+                        <span>{eff_indicator}</span>
+                        <span>{eff_desc}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c_risk3:
+                dd_color = "delta-positive" if max_drawdown > -3.0 else ("delta-neutral" if max_drawdown > -10.0 else "delta-negative")
+                dd_indicator = "🟢" if max_drawdown > -3.0 else ("🟡" if max_drawdown > -10.0 else "🔴")
+                st.markdown(f"""
+                <div class="pro-risk-card drawdown">
+                    <div class="pro-risk-title">🛡️ MÁXIMA CAÍDA HISTÓRICA (Max DD)</div>
+                    <div class="pro-risk-value">
+                        {max_drawdown:.2f}%
+                    </div>
+                    <div class="pro-risk-badge-row {dd_color}">
+                        <span>{dd_indicator}</span>
+                        <span style="line-height: 1.2;">
+                            {peak_date} → {valley_date}<br>
+                            <span style="color: var(--text-muted); font-size: 9px; font-weight: 500;">Pico previo: ${peak_val:,.0f} COP</span>
+                        </span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning("⚡ Datos Históricos Insuficientes: Se requieren al menos 3 días de registros en la base de datos para calcular y renderizar las métricas profesionales de volatilidad y eficiencia.")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -1255,7 +1701,7 @@ with tab_cuadro:
                     """, unsafe_allow_html=True)
                     
                     fig_ind.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=220,
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=270,
                         margin=dict(t=10, b=25, l=65, r=40), showlegend=False,
                         xaxis=dict(type='date', range=limites_s_x, showgrid=False, tickformat="%d-%m", tickfont=dict(size=9, color=TEXT_MUTED)),
                         yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=[s_min - s_pad, s_max + s_pad], showticklabels=True, tickfont=dict(size=8, color=TEXT_MUTED), tickformat="$,.0f"),
@@ -1326,6 +1772,7 @@ with tab_transactions:
             f_clase = st.selectbox("Categoría / Clase:", ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Liquidez COP", "Liquidez USD", "Propiedad Raíz"])
             f_cant = st.number_input("Cantidad a Adquirir:", min_value=0.0, format="%.8f", value=0.0)
             f_precio = st.number_input("Precio Unitario de Referencia:", min_value=0.0, format="%.4f", value=0.0)
+            f_var_manual = 0.0
             
             est_moneda = "USD" if any(x in f_clase for x in ["EEUU", "Cripto", "Commodities", "USD"]) else "COP"
             
@@ -1342,6 +1789,13 @@ with tab_transactions:
             f_cant = st.number_input("Cantidad Consolidada:", min_value=0.0, value=float(actual["Cantidad"]), format="%.8f")
             f_precio = st.number_input("Precio Unitario de Referencia:", min_value=0.0, value=float(actual["Valor_Base_Fijo"]), format="%.4f")
             
+            # Estimación automática de Variación porcentual diaria en base al cambio de precio manual
+            old_price = float(actual["Valor_Base_Fijo"])
+            if old_price > 0.0 and f_precio != old_price:
+                f_var_manual = ((f_precio - old_price) / old_price) * 100
+            else:
+                f_var_manual = float(actual["Var_Manual"]) if "Var_Manual" in actual and not pd.isna(actual["Var_Manual"]) else 0.0
+                
             est_moneda = actual["Moneda"]
             
             c1, c2 = st.columns(2)
@@ -1359,7 +1813,8 @@ with tab_transactions:
             "Clase": f_clase, 
             "Cantidad": f_cant, 
             "Valor_Base_Fijo": f_precio, 
-            "Moneda": est_moneda
+            "Moneda": est_moneda,
+            "Var_Manual": f_var_manual
         }
         st.session_state['inventario_activos_core'] = pd.concat([st.session_state['inventario_activos_core'], pd.DataFrame([nueva_pos])], ignore_index=True)
         guardar_inventario(st.session_state['inventario_activos_core'])
