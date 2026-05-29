@@ -332,29 +332,45 @@ st.markdown(f"""
     <style>
     {CSS_VARIABLES}
     
-    /* ELIMINAR COMPLETAMENTE EL PANEL LATERAL IZQUIERDO Y EL COLLAPSE BUTTON */
+    /* ELIMINAR COMPLETAMENTE EL PANEL LATERAL IZQUIERDO, EL HEADER Y EL COLLAPSE BUTTON */
     [data-testid="stSidebar"] {{
         display: none !important;
     }}
     [data-testid="collapsedControl"] {{
         display: none !important;
     }}
+    [data-testid="stHeader"] {{
+        display: none !important;
+    }}
+    
+    /* Alinear verticalmente los elementos de las columnas del header */
+    [data-testid="stHorizontalBlock"]:first-of-type {{
+        align-items: center !important;
+    }}
+    [data-testid="stHorizontalBlock"]:first-of-type label {{
+        margin-bottom: 0px !important;
+    }}
     
     /* Configuración estructural base full-width */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMainBlockContainer"], [data-testid="stVerticalBlock"] {{
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMainBlockContainer"] {{
         background-color: var(--bg-color) !important;
         color: var(--text-color) !important;
         transition: all 0.2s ease;
     }}
     
-    /* Resaltar todos los títulos, etiquetas de widgets, y textos de selección de periodo */
+    /* Resaltar todos los títulos con peso elegante y nítido */
     div[data-testid="stMarkdownContainer"] h1, 
     div[data-testid="stMarkdownContainer"] h2, 
     div[data-testid="stMarkdownContainer"] h3, 
     div[data-testid="stMarkdownContainer"] h4, 
     div[data-testid="stMarkdownContainer"] h5, 
     div[data-testid="stMarkdownContainer"] h6,
-    span[data-testid="stSubheader"],
+    span[data-testid="stSubheader"] {{
+        color: var(--text-color) !important;
+        font-weight: 600 !important;
+    }}
+    
+    /* Etiquetas de widgets, radios y selectores con peso sofisticado */
     label[data-testid="stWidgetLabel"],
     div[data-testid="stRadio"] label,
     div[role="radiogroup"] label span,
@@ -362,23 +378,29 @@ st.markdown(f"""
     div[data-testid="stNumberInput"] label,
     div[data-testid="stTextInput"] label,
     div[data-testid="stExpander"] details summary p,
-    div[data-testid="stExpander"] details summary span,
-    .stMarkdown p,
-    .stSubheader p {{
+    div[data-testid="stExpander"] details summary span {{
         color: var(--text-color) !important;
-        font-weight: 700 !important;
+        font-weight: 500 !important;
     }}
     
-    /* Forzar visibilidad de textos generales en markdown y listas */
+    /* Textos generales en peso regular fluido */
+    .stMarkdown p,
+    .stSubheader p,
     div[data-testid="stMarkdownContainer"] p, 
     div[data-testid="stMarkdownContainer"] span, 
     div[data-testid="stMarkdownContainer"] li,
     div[data-testid="stMarkdownContainer"] ul,
     div[data-testid="stMarkdownContainer"] ol,
-    div[data-testid="stMarkdownContainer"] strong,
     div[data-testid="stMarkdownContainer"] em,
     div[data-testid="stMarkdownContainer"] code {{
         color: var(--text-color) !important;
+        font-weight: 400 !important;
+    }}
+    
+    /* Peso específico para elementos destacados */
+    div[data-testid="stMarkdownContainer"] strong {{
+        color: var(--text-color) !important;
+        font-weight: 600 !important;
     }}
     
     /* Forzar visibilidad de títulos de expanders y flechas indicadoras */
@@ -420,8 +442,8 @@ st.markdown(f"""
     
     /* Optimización de los márgenes principales para maximizar espacio */
     [data-testid="stMainBlockContainer"] {{
-        padding-top: 1rem !important;
-        padding-bottom: 2rem !important;
+        padding-top: 2rem !important;
+        padding-bottom: 2.5rem !important;
         padding-left: 2rem !important;
         padding-right: 2rem !important;
     }}
@@ -434,12 +456,12 @@ st.markdown(f"""
         background: var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 12px;
-        padding: 12px 16px;
+        padding: 16px 20px;
         box-shadow: var(--shadow);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        height: 105px;
+        height: 120px;
         overflow: hidden;
     }}
     .metric-container:hover {{
@@ -456,8 +478,8 @@ st.markdown(f"""
         white-space: nowrap;
     }}
     .metric-value {{
-        font-size: clamp(14px, 1.45vw, 21px) !important;
-        font-weight: 800;
+        font-size: clamp(18px, 1.8vw, 26px) !important;
+        font-weight: 850;
         color: var(--text-color) !important;
         margin: 3px 0;
         line-height: 1.15;
@@ -498,11 +520,11 @@ st.markdown(f"""
         background: var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 12px;
-        padding: 12px 14px;
+        padding: 16px 18px;
         box-shadow: var(--shadow);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        height: 105px;
+        height: 120px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -793,6 +815,185 @@ st.markdown(f"""
             font-size: 24px !important;
         }}
     }}
+    
+    /* Estilos corporativos de alto nivel para los botones de Streamlit */
+    div.stButton > button[kind="primary"] {{
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        padding: 8px 16px !important;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        height: auto !important;
+    }}
+    div.stButton > button[kind="primary"]:hover {{
+        background: linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%) !important;
+        box-shadow: 0 6px 22px rgba(99, 102, 241, 0.45) !important;
+        transform: translateY(-2px) !important;
+    }}
+    div.stButton > button[kind="primary"]:active {{
+        transform: translateY(0px) !important;
+    }}
+    
+    div.stButton > button[kind="secondary"] {{
+        background-color: var(--card-bg) !important;
+        color: var(--text-color) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        height: auto !important;
+    }}
+    div.stButton > button[kind="secondary"]:hover {{
+        border-color: #EF4444 !important;
+        color: #EF4444 !important;
+        background-color: rgba(239, 68, 68, 0.05) !important;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15) !important;
+    }}
+    
+    /* Estilos Premium para la Tabla de Activos */
+    .premium-table-container {{
+        width: 100%;
+        overflow-x: auto;
+        border-radius: 14px;
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }}
+    .premium-table {{
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }}
+    .premium-table th {{
+        background: rgba(148, 163, 184, 0.08);
+        padding: 14px 16px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-color);
+        letter-spacing: 0.8px;
+        border-bottom: 2px solid var(--border-color);
+    }}
+    .premium-table td {{
+        padding: 14px 16px;
+        font-size: 13px;
+        color: var(--text-color);
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }}
+    .premium-table tr:last-child td {{
+        border-bottom: none;
+    }}
+    .premium-table tr:hover {{
+        background: rgba(99, 102, 241, 0.04);
+        transition: background 0.2s ease;
+    }}
+    .ticker-badge {{
+        font-weight: 800;
+        font-size: 13.5px;
+        letter-spacing: 0.2px;
+        color: var(--text-color);
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: rgba(148, 163, 184, 0.08);
+        border-left: 3px solid #6366F1;
+        display: inline-block;
+    }}
+    .class-badge {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #FFFFFF !important;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }}
+    .currency-badge {{
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+    }}
+    .currency-badge.usd {{
+        background: rgba(99, 102, 241, 0.15) !important;
+        color: #6366F1 !important;
+        border: 1px solid rgba(99, 102, 241, 0.2) !important;
+    }}
+    .currency-badge.cop {{
+        background: rgba(16, 185, 129, 0.15) !important;
+        color: #10B981 !important;
+        border: 1px solid rgba(16, 185, 129, 0.2) !important;
+    }}
+    .pill-var {{
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 800;
+        white-space: nowrap;
+    }}
+    .pill-var.positive {{
+        background: rgba(16, 185, 129, 0.12) !important;
+        color: #10B981 !important;
+        border: 1px solid rgba(16, 185, 129, 0.15) !important;
+    }}
+    .pill-var.negative {{
+        background: rgba(239, 68, 68, 0.12) !important;
+        color: #EF4444 !important;
+        border: 1px solid rgba(239, 68, 68, 0.15) !important;
+    }}
+    .pill-var.neutral {{
+        background: rgba(156, 163, 175, 0.12) !important;
+        color: #9CA3AF !important;
+        border: 1px solid rgba(156, 163, 175, 0.15) !important;
+    }}
+    
+    /* Estilos Premium para las Tarjetas de Noticias */
+    .news-card {{
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: var(--shadow);
+        margin-bottom: 16px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        min-height: 145px;
+        height: auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+    }}
+    .news-card:hover {{
+        transform: translateY(-3px) !important;
+        border-color: var(--primary-glow) !important;
+        box-shadow: var(--shadow-hover) !important;
+    }}
+    .news-title-link {{
+        text-decoration: none !important;
+        color: var(--text-color) !important;
+        transition: color 0.2s ease;
+    }}
+    .news-title-link:hover {{
+        color: #6366F1 !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -903,6 +1104,170 @@ def consultar_mercado_cripto_batch(tickers):
     guardar_cache_precios(precios, variaciones)
     
     return precios, variaciones
+
+# -----------------------------------------------------------------------------
+# SUBSISTEMA DE RADAR DE NOTICIAS (EXTRACTOR COLOMBIA & INTERNACIONAL)
+# -----------------------------------------------------------------------------
+import xml.etree.ElementTree as ET
+
+def obtener_noticias_colombia():
+    import email.utils
+    from datetime import timezone, timedelta
+    url = "https://news.google.com/rss/search?q=Bolsa+de+Valores+de+Colombia+OR+Bancolombia+OR+Grupo+Argos+OR+PEI+Colombia&hl=es-419&gl=CO&ceid=CO:es-419"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    noticias = []
+    try:
+        res = requests.get(url, headers=headers, timeout=8)
+        if res.status_code == 200:
+            root = ET.fromstring(res.content)
+            limit_date = datetime.now(timezone.utc) - timedelta(days=15)
+            
+            for item in root.findall(".//item"):
+                pub_date_str = item.find("pubDate").text
+                
+                # Filtrar por fecha (máximo 15 días de antigüedad)
+                if pub_date_str:
+                    try:
+                        dt = email.utils.parsedate_to_datetime(pub_date_str)
+                        dt_utc = dt.astimezone(timezone.utc)
+                        if dt_utc < limit_date:
+                            continue
+                    except Exception:
+                        pass
+                
+                title = item.find("title").text
+                link = item.find("link").text
+                source = item.find("source").text if item.find("source") is not None else "Google News"
+                
+                # Format Colombian source names cleanly
+                if "La República" in title or "republica" in link:
+                    source = "Diario La República 🇨🇴"
+                elif "Valora" in title or "valora" in link:
+                    source = "Valora Analitik 🇨🇴"
+                elif "Portafolio" in title or "portafolio" in link:
+                    source = "Diario Portafolio 🇨🇴"
+                elif "El Espectador" in title or "elespectador" in link:
+                    source = "El Espectador 🇨🇴"
+                elif "El Tiempo" in title or "eltiempo" in link:
+                    source = "El Tiempo 🇨🇴"
+                else:
+                    source = f"{source} 🇨🇴"
+                    
+                # Clean Google News suffix from titles e.g. " - La República"
+                if " - " in title:
+                    title = " - ".join(title.split(" - ")[:-1])
+                    
+                noticias.append({
+                    "title": title,
+                    "link": link,
+                    "publisher": source,
+                    "time": pub_date_str[:16] if pub_date_str else "Reciente",
+                    "type": "Local 🇨🇴",
+                    "accent_color": "#10B981"
+                })
+                
+                if len(noticias) >= 10:  # Mantener un límite de hasta 10 noticias frescas
+                    break
+    except Exception:
+        pass
+    return noticias
+
+def obtener_noticias_internacionales(tickers):
+    from datetime import timezone, timedelta
+    noticias = []
+    
+    # Tabla de mapeo para tickers estándar de Yahoo Finance
+    mapping = {}
+    for t in tickers:
+        if t in ["BTC", "ETH", "ADA", "XRP"]:
+            mapping[f"{t}-USD"] = t
+        elif t in ["GOOG", "MSFT", "IONQ", "GLD", "UNH", "V"]:
+            mapping[t] = t
+            
+    top_tickers = list(mapping.keys())[:4]
+    limit_date = datetime.now(timezone.utc) - timedelta(days=15)
+    
+    for t_yf in top_tickers:
+        t_orig = mapping[t_yf]
+        try:
+            ticker_obj = yf.Ticker(t_yf)
+            news_items = ticker_obj.news
+            if news_items:
+                ticker_count = 0
+                for item in news_items:
+                    # Soporte para formato nuevo anidado y formato anterior plano
+                    content = item.get("content", item) if isinstance(item.get("content"), dict) else item
+                    
+                    # Extraer fecha de publicación y filtrar por antigüedad (máximo 15 días)
+                    pub_time_stamp = content.get("providerPublishTime")
+                    pub_date_str = content.get("pubDate")
+                    
+                    is_recent = True
+                    fecha_str = "Reciente"
+                    
+                    if pub_time_stamp:
+                        try:
+                            pub_date = datetime.fromtimestamp(pub_time_stamp, timezone.utc)
+                            if pub_date < limit_date:
+                                is_recent = False
+                            fecha_str = pub_date.strftime("%d-%b %Y %H:%M")
+                        except Exception:
+                            pass
+                    elif pub_date_str:
+                        try:
+                            date_str = pub_date_str.replace("Z", "+00:00")
+                            pub_date = datetime.fromisoformat(date_str)
+                            if pub_date < limit_date:
+                                is_recent = False
+                            fecha_str = pub_date.strftime("%d-%b %Y %H:%M")
+                        except Exception:
+                            pass
+                            
+                    if not is_recent:
+                        continue
+                        
+                    title = content.get("title")
+                    if not title:
+                        continue
+                        
+                    # Extraer enlace seguro
+                    link = ""
+                    if isinstance(content.get("clickThroughUrl"), dict):
+                        link = content.get("clickThroughUrl", {}).get("url", "")
+                    elif isinstance(content.get("canonicalUrl"), dict):
+                        link = content.get("canonicalUrl", {}).get("url", "")
+                    else:
+                        link = content.get("link", "")
+                        
+                    # Extraer publicador / fuente
+                    publisher = "Yahoo Finance"
+                    if isinstance(content.get("provider"), dict):
+                        publisher = content.get("provider", {}).get("displayName", "Yahoo Finance")
+                    else:
+                        publisher = content.get("publisher", "Yahoo Finance")
+                        
+                    noticias.append({
+                        "title": f"[{t_orig}] {title}",
+                        "link": link,
+                        "publisher": f"{publisher} 🇺🇸",
+                        "time": fecha_str,
+                        "type": "Internacional 🇺🇸",
+                        "accent_color": "#6366F1"
+                    })
+                    
+                    ticker_count += 1
+                    if ticker_count >= 3:  # Máximo 3 noticias por ticker
+                        break
+        except Exception:
+            pass
+    return noticias
+
+@st.cache_data(ttl=1800)
+def cargar_radar_noticias(tickers_usd):
+    noticias_locales = obtener_noticias_colombia()
+    noticias_inter = obtener_noticias_internacionales(tickers_usd)
+    # Return sorted or interlaid results
+    return noticias_locales + noticias_inter
 
 # -----------------------------------------------------------------------------
 # CORE PIPELINE CONTABLE EN VIVO (MÁXIMA EXACTITUD Y CAMBIO DE DIVISA EXACTO)
@@ -1103,7 +1468,7 @@ df_total_diario_master = df_linea_tiempo_master.groupby("Fecha")["Valor_COP"].su
 # BARRA DE CONTROL SUPERIOR GLASSMORPHIC (REEMPLAZA AL SIDEBAR)
 # -----------------------------------------------------------------------------
 st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-c_logo, c_space, c_badge, c_toggle, c_btn = st.columns([2.2, 0.5, 1.8, 1.0, 1.0])
+c_logo, c_badge, c_toggle, c_btn = st.columns([3.0, 2.6, 1.1, 1.3])
 
 with c_logo:
     st.markdown("<h2 style='margin:0; font-weight:800; font-size:22px; color:var(--text-color); line-height:1; white-space:nowrap;'>Inversiones al instante</h2>", unsafe_allow_html=True)
@@ -1111,9 +1476,18 @@ with c_logo:
 
 with c_badge:
     st.markdown(f"""
-    <div style='background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:6px 12px; text-align:center;'>
-        <span style='font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;'>TRM de Mercado:</span>
-        <span style='font-size:12px; font-weight:800; color:#10B981; margin-left:6px;'>${trm_dia:,.2f} COP</span>
+    <div style='background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(6, 182, 212, 0.16) 100%); 
+                border: 2px solid #10B981; 
+                border-radius: 12px; 
+                padding: 8px 18px; 
+                text-align: center;
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);'>
+        <span style='font-size: 10px; font-weight: 900; color: var(--text-color); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 3px;'>
+            🟢 TRM OPERATIVA EN VIVO
+        </span>
+        <span style='font-size: 20px; font-weight: 950; color: #10B981; text-shadow: 0 0 12px rgba(16, 185, 129, 0.5); font-family: monospace;'>
+            ${trm_dia:,.2f} <span style='font-size: 12px; color: var(--text-muted); font-weight: 800;'>COP</span>
+        </span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1137,12 +1511,12 @@ st.markdown("<div style='margin-bottom: 15px; border-bottom: 1px solid var(--bor
 c_izq_metrics, c_der_pnl = st.columns([5.0, 1.3])
 
 with c_izq_metrics:
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3 = st.columns(3)
     with m1:
         st.markdown(f"""
         <div class="metric-container">
             <div class="metric-label">Assets Under Management</div>
-            <div class="metric-value">${patrimonio_total:,.0f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
+            <div class="metric-value">${patrimonio_total:,.0f} <span style="font-size:13px; color:var(--text-muted)">COP</span></div>
             <div class="metric-delta delta-neutral">AUM Consolidado</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1150,7 +1524,7 @@ with c_izq_metrics:
         st.markdown(f"""
         <div class="metric-container">
             <div class="metric-label">Liquid Portfolio Value</div>
-            <div class="metric-value">${patrimonio_liquido:,.0f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
+            <div class="metric-value">${patrimonio_liquido:,.0f} <span style="font-size:13px; color:var(--text-muted)">COP</span></div>
             <div class="metric-delta delta-neutral">Excluye Finca Raíz</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1160,16 +1534,8 @@ with c_izq_metrics:
         st.markdown(f"""
         <div class="metric-container">
             <div class="metric-label">Daily Change (Real-Time)</div>
-            <div class="metric-value {color_class}">{flecha} ${abs(var_total_cop):,.0f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
+            <div class="metric-value {color_class}">{flecha} ${abs(var_total_cop):,.0f} <span style="font-size:13px; color:var(--text-muted)">COP</span></div>
             <div class="metric-delta {color_class}">{var_total_pct:+.2f}% vs Cierre</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m4:
-        st.markdown(f"""
-        <div class="metric-container">
-            <div class="metric-label">TRM Operativa Activa</div>
-            <div class="metric-value">${trm_dia:,.2f} <span style="font-size:11px; color:var(--text-muted)">COP</span></div>
-            <div class="metric-delta delta-neutral">Sincronizado vía yFinance</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1210,8 +1576,8 @@ with c_der_pnl:
     st.markdown(f"""
     <div class="pnl-container">
         <div class="metric-label">P&G {periodo_pnl.upper()}</div>
-        <div class="metric-value {color_pnl}" style="font-size: clamp(14px, 1.35vw, 19px) !important; margin: 4px 0;">
-            {simbolo_pnl} ${abs(net_pnl):,.0f} COP
+        <div class="metric-value {color_pnl}" style="font-size: clamp(16px, 1.6vw, 24px) !important; margin: 4px 0;">
+            {simbolo_pnl} ${abs(net_pnl):,.0f} <span style="font-size:12px; color:var(--text-muted); font-weight: 700;">COP</span>
         </div>
         <div class="metric-delta {color_pnl}">
             {pct_pnl:+.2f}% de variación
@@ -1347,9 +1713,10 @@ for idx, r_clase in row2_data.reset_index(drop=True).iterrows():
         """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
-tab_cuadro, tab_records, tab_transactions = st.tabs([
+tab_cuadro, tab_records, tab_news, tab_transactions = st.tabs([
     "📊 Portal de Analítica & Gráficos", 
     "📋 Libro de Activos & Saldos", 
+    "📰 Radar de Noticias & Inteligencia",
     "💼 Centro Transaccional (CRUD)"
 ])
 
@@ -1369,7 +1736,7 @@ with tab_cuadro:
             legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
             font=dict(family="Inter, system-ui")
         )
-        st.plotly_chart(fig_donut_total, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
+        st.plotly_chart(fig_donut_total, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
         
     with col_donut_der:
         st.markdown("<div style='text-align:center; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:5px;'>DISTRIBUCIÓN DE PORTAFOLIO LÍQUIDO (EXCLUYE PROPIEDAD RAÍZ)</div>", unsafe_allow_html=True)
@@ -1380,7 +1747,7 @@ with tab_cuadro:
             legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
             font=dict(family="Inter, system-ui")
         )
-        st.plotly_chart(fig_donut_liquido, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
+        st.plotly_chart(fig_donut_liquido, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -1454,7 +1821,7 @@ with tab_cuadro:
         yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=limites_y, tickfont=dict(size=9, color=TEXT_MUTED), tickformat="$,.0f"),
         font=dict(family="Inter, system-ui, sans-serif")
     )
-    st.plotly_chart(fig_linea_total, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
+    st.plotly_chart(fig_linea_total, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
 
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     with st.expander("🛡️ DIAGNÓSTICO PROFESIONAL DE RIESGO & EXPOSICIÓN CAMBIARIA", expanded=True):
@@ -1707,52 +2074,300 @@ with tab_cuadro:
                         yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=[s_min - s_pad, s_max + s_pad], showticklabels=True, tickfont=dict(size=8, color=TEXT_MUTED), tickformat="$,.0f"),
                         font=dict(family="Inter, system-ui, sans-serif")
                     )
-                    st.plotly_chart(fig_ind, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
+                    st.plotly_chart(fig_ind, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
 
 # -----------------------------------------------------------------------------
 # TAB 2: BOOK OF RECORDS & OPERATIONS
 # -----------------------------------------------------------------------------
 with tab_records:
-    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>📋 INVENTARIO DETALLADO DE ACTIVOS</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>📋 LIBRO DETALLADO DE ACTIVOS & SALDOS DE CONTROL</p>", unsafe_allow_html=True)
     
-    # Función para colorear el texto en el dataframe de forma dinámica según la dirección del cambio
-    def color_variacion(val):
-        if val > 0.001:
-            return "color: #10B981; font-weight: 700;"
-        elif val < -0.001:
-            return "color: #EF4444; font-weight: 700;"
-        return "color: #9CA3AF;"
+    html_rows = []
+    for idx, r in maestro_df.iterrows():
+        t = r["Ticker"]
+        c_name = r["Clase"]
+        meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
+        emoji = meta["emoji"]
+        c_color = meta["color"]
         
-    df_mostrar = maestro_df[["Ticker", "Clase", "Cantidad", "Moneda", "Precio_Unitario", "Total_COP", "% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"]].copy()
-    
-    # Formatear el precio unitario dinámicamente según la moneda del activo (COP o USD)
-    df_mostrar["Precio Unitario"] = df_mostrar.apply(
-        lambda r: f"${r['Precio_Unitario']:,.2f} USD" if r["Moneda"] == "USD" else f"${r['Precio_Unitario']:,.0f} COP",
-        axis=1
-    )
-    
-    # Reordenar columnas para posicionar 'Precio Unitario'
-    df_mostrar = df_mostrar[["Ticker", "Clase", "Cantidad", "Moneda", "Precio Unitario", "Total_COP", "% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"]]
-    
-    styler = df_mostrar.style.format({
-        "Cantidad": "{:,.4f}", 
-        "Total_COP": "${:,.0f} COP",
-        "% Var Diario": lambda x: f"▲ {x:+.2f}%" if x > 0.001 else (f"▼ {x:+.2f}%" if x < -0.001 else f"  {x:+.2f}%"),
-        "Var COP": lambda x: f"▲ ${x:,.0f} COP" if x > 0.001 else (f"▼ ${abs(x):,.0f} COP" if x < -0.001 else f"  ${x:,.0f} COP"),
-        "Ef_Mercado": lambda x: f"▲ ${x:,.0f} COP" if x > 0.001 else (f"▼ ${abs(x):,.0f} COP" if x < -0.001 else f"  ${x:,.0f} COP"),
-        "Ef_Divisa": lambda x: f"▲ ${x:,.0f} COP" if x > 0.001 else (f"▼ ${abs(x):,.0f} COP" if x < -0.001 else f"  ${x:,.0f} COP")
-    })
-    
-    # Aplicar mapa de colores de forma segura según la versión de Pandas disponible
-    try:
-        styled_df = styler.map(color_variacion, subset=["% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"])
-    except AttributeError:
-        styled_df = styler.applymap(color_variacion, subset=["% Var Diario", "Var COP", "Ef_Mercado", "Ef_Divisa"])
+        cant = f"{r['Cantidad']:,.4f}" if r["Cantidad"] > 0 else "0.0000"
+        moneda = r["Moneda"]
+        curr_class = "usd" if moneda == "USD" else "cop"
         
-    st.dataframe(styled_df, use_container_width=True)
+        p_unit = f"${r['Precio_Unitario']:,.2f} USD" if moneda == "USD" else f"${r['Precio_Unitario']:,.0f} COP"
+        tot_cop = f"${r['Total_COP']:,.0f} COP"
+        
+        pct_val = r["% Var Diario"] if not pd.isna(r["% Var Diario"]) else 0.0
+        var_cop_val = r["Var COP"] if not pd.isna(r["Var COP"]) else 0.0
+        
+        if pct_val > 0.001:
+            var_class = "positive"
+            var_sign = "▲"
+        elif pct_val < -0.001:
+            var_class = "negative"
+            var_sign = "▼"
+        else:
+            var_class = "neutral"
+            var_sign = "▪"
+            
+        var_str = f"{var_sign} {abs(pct_val):.2f}% (${abs(var_cop_val):,.0f} COP)"
+        
+        # Efectos explicativos
+        ef_m = r["Ef_Mercado"] if not pd.isna(r["Ef_Mercado"]) else 0.0
+        if ef_m > 0.01:
+            ef_m_sign = "▲"
+            ef_m_color = "#10B981"
+        elif ef_m < -0.01:
+            ef_m_sign = "▼"
+            ef_m_color = "#EF4444"
+        else:
+            ef_m_sign = "▪"
+            ef_m_color = "var(--text-muted)"
+        ef_m_str = f"<span style='color: {ef_m_color}; font-weight: 600;'>{ef_m_sign} ${abs(ef_m):,.0f}</span>"
+        
+        ef_d = r["Ef_Divisa"] if not pd.isna(r["Ef_Divisa"]) else 0.0
+        if ef_d > 0.01:
+            ef_d_sign = "▲"
+            ef_d_color = "#10B981"
+        elif ef_d < -0.01:
+            ef_d_sign = "▼"
+            ef_d_color = "#EF4444"
+        else:
+            ef_d_sign = "▪"
+            ef_d_color = "var(--text-muted)"
+        ef_d_str = f"<span style='color: {ef_d_color}; font-weight: 600;'>{ef_d_sign} ${abs(ef_d):,.0f}</span>"
+        
+        row_html = f"""
+        <tr>
+            <td><span class="ticker-badge" style="border-left-color: {c_color};">{t}</span></td>
+            <td><span class="class-badge" style="background-color: {c_color};">{emoji} {c_name}</span></td>
+            <td style="text-align: right; font-weight: 500; font-family: monospace; font-size: 13px;">{cant}</td>
+            <td style="text-align: center;"><span class="currency-badge {curr_class}">{moneda}</span></td>
+            <td style="text-align: right; font-weight: 500; font-family: monospace; font-size: 13px;">{p_unit}</td>
+            <td style="text-align: right; font-weight: 600; font-family: monospace; font-size: 13px; color: var(--text-color);">{tot_cop}</td>
+            <td><span class="pill-var {var_class}">{var_str}</span></td>
+            <td style="text-align: right; font-family: monospace; font-size: 13px;">{ef_m_str}</td>
+            <td style="text-align: right; font-family: monospace; font-size: 13px;">{ef_d_str}</td>
+        </tr>
+        """
+        html_rows.append(row_html)
+        
+    table_content = "\n".join(html_rows)
+    
+    html_table = f"""
+    <style>
+    {CSS_VARIABLES}
+    body {{
+        background-color: transparent !important;
+        margin: 0;
+        padding: 0;
+    }}
+    /* Estilos Premium para la Tabla de Activos */
+    .premium-table-container {{
+        width: 100%;
+        overflow-x: auto;
+        border-radius: 14px;
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }}
+    .premium-table {{
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }}
+    .premium-table th {{
+        background: rgba(148, 163, 184, 0.08);
+        padding: 14px 16px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-color);
+        letter-spacing: 0.8px;
+        border-bottom: 2px solid var(--border-color);
+    }}
+    .premium-table td {{
+        padding: 14px 16px;
+        font-size: 13px;
+        color: var(--text-color);
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }}
+    .premium-table tr:last-child td {{
+        border-bottom: none;
+    }}
+    .premium-table tr:hover {{
+        background: rgba(99, 102, 241, 0.04);
+        transition: background 0.2s ease;
+    }}
+    .ticker-badge {{
+        font-weight: 600;
+        font-size: 13px;
+        letter-spacing: 0.2px;
+        color: var(--text-color);
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: rgba(148, 163, 184, 0.08);
+        border-left: 3px solid #6366F1;
+        display: inline-block;
+    }}
+    .class-badge {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 550;
+        color: #FFFFFF !important;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }}
+    .currency-badge {{
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }}
+    .currency-badge.usd {{
+        background: rgba(99, 102, 241, 0.15) !important;
+        color: #6366F1 !important;
+        border: 1px solid rgba(99, 102, 241, 0.2) !important;
+    }}
+    .currency-badge.cop {{
+        background: rgba(16, 185, 129, 0.15) !important;
+        color: #10B981 !important;
+        border: 1px solid rgba(16, 185, 129, 0.2) !important;
+    }}
+    .pill-var {{
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+    }}
+    .pill-var.positive {{
+        background: rgba(16, 185, 129, 0.12) !important;
+        color: #10B981 !important;
+        border: 1px solid rgba(16, 185, 129, 0.15) !important;
+    }}
+    .pill-var.negative {{
+        background: rgba(239, 68, 68, 0.12) !important;
+        color: #EF4444 !important;
+        border: 1px solid rgba(239, 68, 68, 0.15) !important;
+    }}
+    .pill-var.neutral {{
+        background: rgba(156, 163, 175, 0.12) !important;
+        color: #9CA3AF !important;
+        border: 1px solid rgba(156, 163, 175, 0.15) !important;
+    }}
+    </style>
+    <div class="premium-table-container">
+        <table class="premium-table">
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Clase de Activo</th>
+                    <th style="text-align: right;">Cantidad</th>
+                    <th style="text-align: center;">Moneda</th>
+                    <th style="text-align: right;">Precio Unitario</th>
+                    <th style="text-align: right;">Valor Total (COP)</th>
+                    <th>% Var Diario (COP)</th>
+                    <th style="text-align: right;">Ef. Mercado</th>
+                    <th style="text-align: right;">Ef. Divisa</th>
+                </tr>
+            </thead>
+            <tbody>
+                {table_content}
+            </tbody>
+        </table>
+    </div>
+    """
+    st.components.v1.html(html_table, height=920, scrolling=True)
 
 # -----------------------------------------------------------------------------
-# TAB 3: TRANSACTION DESK ENGINE (OPTIMIZED CRUD & MODAL-LIKE DESIGN)
+# TAB 3: RADAR DE NOTICIAS & INTELIGENCIA DE MERCADO
+# -----------------------------------------------------------------------------
+with tab_news:
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>📰 RADAR DE NOTICIAS & INTELIGENCIA DE MERCADO</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:12px; color:var(--text-muted); margin-bottom:15px;'>Noticias recientes de última hora sobre tus activos en cartera de Colombia y del mundo. Datos actualizados y cacheados cada 30 minutos.</p>", unsafe_allow_html=True)
+    
+    # 1. Obtener lista de tickers activos
+    tickers_portafolio = list(maestro_df["Ticker"].unique())
+    
+    # 2. Cargar noticias (con cache inteligente)
+    with st.spinner("Sincronizando últimas noticias del mercado..."):
+        lista_noticias = cargar_radar_noticias(tickers_portafolio)
+        
+    if not lista_noticias:
+        st.info("ℹ️ No se encontraron noticias recientes para tus activos en este momento. Reintenta más tarde o verifica tu conexión a internet.")
+    else:
+        # 3. Filtro de noticias
+        filtro = st.radio(
+            "Filtrar Noticias por Ámbito de Mercado:",
+            ["Todas las Noticias 🌐", "Mercados Internacionales 🇺🇸", "Mercado Local 🇨🇴"],
+            horizontal=True,
+            index=0
+        )
+        
+        # Aplicar el filtro
+        if "Local" in filtro:
+            noticias_filtradas = [n for n in lista_noticias if n["type"] == "Local 🇨🇴"]
+        elif "Internacionales" in filtro:
+            noticias_filtradas = [n for n in lista_noticias if n["type"] == "Internacional 🇺🇸"]
+        else:
+            noticias_filtradas = lista_noticias
+            
+        if not noticias_filtradas:
+            st.warning("⚠️ No hay noticias de esta categoría para tus activos actuales.")
+        else:
+            # 4. Renderizar noticias en grid de 2 columnas
+            cols_noticias = st.columns(2)
+            for idx, n in enumerate(noticias_filtradas):
+                col_target = cols_noticias[idx % 2]
+                
+                # HTML Card
+                card_html = f"""
+                <div class="news-card" style="border-left: 4px solid {n['accent_color']};">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px;">
+                            <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: {n['accent_color']}; letter-spacing: 0.8px; white-space: nowrap;">
+                                {n['type']}
+                            </span>
+                            <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; white-space: nowrap;">
+                                🕒 {n['time']}
+                            </span>
+                        </div>
+                        <h4 style="margin: 0; font-size: 13.5px; line-height: 1.35; font-weight: 750; color: var(--text-color); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 55px;">
+                            <a href="{n['link']}" target="_blank" class="news-title-link">
+                                {n['title']}
+                            </a>
+                        </h4>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+                        <span style="font-size: 10.5px; font-weight: 700; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px;">
+                            Fuente: <span style="color: var(--text-color); font-weight: 800;">{n['publisher']}</span>
+                        </span>
+                        <a href="{n['link']}" target="_blank" style="font-size: 11px; font-weight: 800; color: #6366F1; text-decoration: none; display: flex; align-items: center; gap: 3px; white-space: nowrap;">
+                            Leer Artículo ↗
+                        </a>
+                    </div>
+                </div>
+                """
+                with col_target:
+                    st.markdown(card_html, unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# TAB 4: TRANSACTION DESK ENGINE (OPTIMIZED CRUD & MODAL-LIKE DESIGN)
 # -----------------------------------------------------------------------------
 with tab_transactions:
     st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>💼 TRANSACTION DESK ENGINE (Gestor de Portafolio)</p>", unsafe_allow_html=True)
