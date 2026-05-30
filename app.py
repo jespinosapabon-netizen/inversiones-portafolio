@@ -1437,6 +1437,40 @@ df_hist_consolidado["Fecha"] = pd.to_datetime(df_hist_consolidado["Fecha"])
 guardar_historial(df_hist_consolidado)
 
 # 4. Interpolación
+def aplicar_puente_browniano(series_interpolada, is_nan_mask, clase):
+    import numpy as np
+    vol_dict = {
+        "Acciones EEUU": 0.024,      # Incrementado de 0.012 para más detalle y dinamismo
+        "Criptomonedas": 0.055,      # Incrementado de 0.028 para mayor detalle en fluctuaciones
+        "Commodities (Oro)": 0.018,  # Incrementado de 0.009
+        "Acciones Colombia": 0.020,   # Incrementado de 0.010
+        "Fondos de Inversión": 0.004, # Incrementado de 0.001
+        "Cash Broker Desk": 0.001     # Incrementado de 0.0005
+    }
+    sigma = vol_dict.get(clase, 0.010)
+    real_indices = np.where(~is_nan_mask)[0]
+    valores = series_interpolada.values.copy()
+    
+    # Semilla fija basada en el nombre de la clase para consistencia visual entre refrescos
+    seed = sum(ord(c) for c in clase)
+    np.random.seed(seed)
+    
+    for i in range(len(real_indices) - 1):
+        idx_start = real_indices[i]
+        idx_end = real_indices[i+1]
+        n = idx_end - idx_start
+        
+        if n > 1:
+            daily_returns = np.random.normal(0, sigma, n)
+            w = np.cumsum(daily_returns)
+            t = np.arange(1, n)
+            bridge = w[:-1] - (t / n) * w[-1]
+            
+            for step_idx, step_val in enumerate(bridge):
+                valores[idx_start + 1 + step_idx] *= (1 + step_val)
+                
+    return pd.Series(valores, index=series_interpolada.index)
+
 df_lista_completa = []
 clases_maestras_series = ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Cash Broker Desk"]
 
@@ -1447,8 +1481,18 @@ for clase_nombre in clases_maestras_series:
         rango_master = pd.date_range(start=df_clase_raw["Fecha"].min(), end=hoy_datetime, freq='D')
         df_clase_interp = df_clase_raw.set_index("Fecha").reindex(rango_master)
         
-        # Interpolación lineal suave
+        # Guardar la máscara de valores que serán interpolados antes de aplicar la regresión
+        mask_missing = df_clase_interp["Valor_COP"].isna()
+        
+        # Interpolación lineal suave base
         df_clase_interp["Valor_COP"] = df_clase_interp["Valor_COP"].interpolate(method='linear')
+        
+        # Aplicar fluctuaciones de mercado mediante Puente Browniano
+        df_clase_interp["Valor_COP"] = aplicar_puente_browniano(
+            df_clase_interp["Valor_COP"],
+            mask_missing,
+            clase_nombre
+        )
         
         if hoy_datetime in df_clase_raw["Fecha"].values:
             val_live_real = float(df_clase_raw.set_index("Fecha").loc[hoy_datetime, "Valor_COP"])
@@ -1734,7 +1778,16 @@ with tab_cuadro:
         fig_donut_total.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=380,
             legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
-            font=dict(family="Inter, system-ui")
+            font=dict(family="Inter, system-ui"),
+            hoverlabel=dict(
+                bgcolor="rgba(17, 24, 39, 0.95)" if modo_oscuro else "rgba(255, 255, 255, 0.95)",
+                bordercolor="rgba(99, 102, 241, 0.3)" if modo_oscuro else "rgba(79, 70, 229, 0.3)",
+                font=dict(
+                    color="#FFFFFF" if modo_oscuro else "#0F172A",
+                    size=11,
+                    family="Inter, system-ui, sans-serif"
+                )
+            )
         )
         st.plotly_chart(fig_donut_total, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
         
@@ -1745,7 +1798,16 @@ with tab_cuadro:
         fig_donut_liquido.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, margin=dict(t=10, b=10, l=10, r=10), height=380,
             legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=9, color=TEXT_COLOR, family="Inter, system-ui")),
-            font=dict(family="Inter, system-ui")
+            font=dict(family="Inter, system-ui"),
+            hoverlabel=dict(
+                bgcolor="rgba(17, 24, 39, 0.95)" if modo_oscuro else "rgba(255, 255, 255, 0.95)",
+                bordercolor="rgba(99, 102, 241, 0.3)" if modo_oscuro else "rgba(79, 70, 229, 0.3)",
+                font=dict(
+                    color="#FFFFFF" if modo_oscuro else "#0F172A",
+                    size=11,
+                    family="Inter, system-ui, sans-serif"
+                )
+            )
         )
         st.plotly_chart(fig_donut_liquido, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
 
@@ -1764,7 +1826,7 @@ with tab_cuadro:
     df_total_diario = df_total_diario_master[df_total_diario_master["Fecha"] >= fecha_limite_inf]
     df_hist_diario = df_linea_tiempo_master[df_linea_tiempo_master["Fecha"] >= fecha_limite_inf]
 
-    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:5px;'>3. RENDIMIENTO HISTÓRICO CONSOLIDADO (Evolución Estructural Suavizada)</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:5px;'>3. RENDIMIENTO HISTÓRICO CONSOLIDADO (Evolución Dinámica con Fluctuaciones Detalladas)</p>", unsafe_allow_html=True)
     
     fig_linea_total = go.Figure()
     
@@ -1819,7 +1881,16 @@ with tab_cuadro:
         margin=dict(t=15, b=30, l=65, r=40), showlegend=False,
         xaxis=dict(type='date', range=limites_x, showgrid=False, tickformat="%d-%m", tickfont=dict(size=10, color=TEXT_MUTED)),
         yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=limites_y, tickfont=dict(size=9, color=TEXT_MUTED), tickformat="$,.0f"),
-        font=dict(family="Inter, system-ui, sans-serif")
+        font=dict(family="Inter, system-ui, sans-serif"),
+        hoverlabel=dict(
+            bgcolor="rgba(17, 24, 39, 0.95)" if modo_oscuro else "rgba(255, 255, 255, 0.95)",
+            bordercolor="rgba(99, 102, 241, 0.3)" if modo_oscuro else "rgba(79, 70, 229, 0.3)",
+            font=dict(
+                color="#FFFFFF" if modo_oscuro else "#0F172A",
+                size=12,
+                family="Inter, system-ui, sans-serif"
+            )
+        )
     )
     st.plotly_chart(fig_linea_total, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
 
@@ -2013,8 +2084,7 @@ with tab_cuadro:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # RECTIFICACIÓN CLAVE: Se utiliza TEXT_MUTED (variable de color Python) para los subtítulos internos de Plotly en vez de var(--text-muted) CSS
-    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>4. TENDENCIAS HISTÓRICAS SEGMENTADAS (Evolución Suavizada de Saldos de Control por Componente)</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>4. TENDENCIAS HISTÓRICAS SEGMENTADAS (Evolución Detallada por Componente)</p>", unsafe_allow_html=True)
     clases_hist_v6 = ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Cash Broker Desk"]
     
     for i in range(0, len(clases_hist_v6), 2):
@@ -2024,7 +2094,9 @@ with tab_cuadro:
         for sub_idx, c_name in enumerate(bloque_clases):
             with columnas_render[sub_idx]:
                 df_sub = df_hist_diario[df_hist_diario["Clase"] == c_name].sort_values("Fecha")
-                if not df_sub.empty:
+                if df_sub.empty:
+                    st.info(f"💡 Sin datos para {c_name} en el rango.")
+                else:
                     val_grupo_fiel = maestro_df[maestro_df["Clase_Linea"] == c_name]["Total_COP"].sum()
                     
                     s_min, s_max = float(df_sub["Valor_COP"].min()), float(df_sub["Valor_COP"].max())
@@ -2068,11 +2140,20 @@ with tab_cuadro:
                     """, unsafe_allow_html=True)
                     
                     fig_ind.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=270,
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=270, hovermode="x unified",
                         margin=dict(t=10, b=25, l=65, r=40), showlegend=False,
                         xaxis=dict(type='date', range=limites_s_x, showgrid=False, tickformat="%d-%m", tickfont=dict(size=9, color=TEXT_MUTED)),
                         yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=[s_min - s_pad, s_max + s_pad], showticklabels=True, tickfont=dict(size=8, color=TEXT_MUTED), tickformat="$,.0f"),
-                        font=dict(family="Inter, system-ui, sans-serif")
+                        font=dict(family="Inter, system-ui, sans-serif"),
+                        hoverlabel=dict(
+                            bgcolor="rgba(17, 24, 39, 0.95)" if modo_oscuro else "rgba(255, 255, 255, 0.95)",
+                            bordercolor="rgba(99, 102, 241, 0.3)" if modo_oscuro else "rgba(79, 70, 229, 0.3)",
+                            font=dict(
+                                color="#FFFFFF" if modo_oscuro else "#0F172A",
+                                size=11,
+                                family="Inter, system-ui, sans-serif"
+                            )
+                        )
                     )
                     st.plotly_chart(fig_ind, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
 
