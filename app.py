@@ -2196,17 +2196,17 @@ with tab_cuadro:
             top_gain = gains_df.iloc[0]
             g_pct = (top_gain["Var COP"] / (top_gain["Total_COP"] - top_gain["Var COP"]) * 100) if (top_gain["Total_COP"] - top_gain["Var COP"]) > 0 else 0.0
             motores_html.append(f"""
-            <div style="flex: 1; padding: 14px 16px; background: var(--card-bg); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; margin: 5px; box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
-                <span style="font-size: 11px; font-weight: 800; color: #10B981; text-transform: uppercase; display: block;">🚀 MAYOR IMPULSOR POSITIVO</span>
-                <span style="font-size: 14.5px; font-weight: 700; color: var(--text-color); display: block; margin-top: 3px;">{top_gain['Ticker']} ({top_gain['Clase']})</span>
-                <span style="font-size: 13px; font-weight: 700; color: #10B981; display: block; margin-top: 2px;">
+            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid rgba(16, 185, 129, 0.3) !important; border-radius: 10px; margin: 5px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
+                <span style="font-size: 11px; font-weight: 800; color: #10B981 !important; text-transform: uppercase; display: block;">🚀 MAYOR IMPULSOR POSITIVO</span>
+                <span style="font-size: 14.5px; font-weight: 700; color: #F3F4F6 !important; display: block; margin-top: 3px;">{top_gain['Ticker']} ({top_gain['Clase']})</span>
+                <span style="font-size: 13px; font-weight: 700; color: #10B981 !important; display: block; margin-top: 2px;">
                     +${top_gain['Var COP']:,.0f} COP ({g_pct:+.2f}%)
                 </span>
             </div>
             """)
         else:
             motores_html.append("""
-            <div style="flex: 1; padding: 14px 16px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; margin: 5px; text-align: center; color: var(--text-muted); font-size: 13px; box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
+            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 10px; margin: 5px; text-align: center; color: #9CA3AF !important; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
                 Sin ganancias significativas hoy.
             </div>
             """)
@@ -2215,17 +2215,17 @@ with tab_cuadro:
             top_loss = losses_df.iloc[0]
             l_pct = (top_loss["Var COP"] / (top_loss["Total_COP"] - top_loss["Var COP"]) * 100) if (top_loss["Total_COP"] - top_loss["Var COP"]) > 0 else 0.0
             motores_html.append(f"""
-            <div style="flex: 1; padding: 14px 16px; background: var(--card-bg); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 10px; margin: 5px; box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
-                <span style="font-size: 11px; font-weight: 800; color: #EF4444; text-transform: uppercase; display: block;">⚠️ MAYOR IMPULSOR NEGATIVO</span>
-                <span style="font-size: 14.5px; font-weight: 700; color: var(--text-color); display: block; margin-top: 3px;">{top_loss['Ticker']} ({top_loss['Clase']})</span>
-                <span style="font-size: 13px; font-weight: 700; color: #EF4444; display: block; margin-top: 2px;">
+            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important; border-radius: 10px; margin: 5px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
+                <span style="font-size: 11px; font-weight: 800; color: #EF4444 !important; text-transform: uppercase; display: block;">⚠️ MAYOR IMPULSOR NEGATIVO</span>
+                <span style="font-size: 14.5px; font-weight: 700; color: #F3F4F6 !important; display: block; margin-top: 3px;">{top_loss['Ticker']} ({top_loss['Clase']})</span>
+                <span style="font-size: 13px; font-weight: 700; color: #EF4444 !important; display: block; margin-top: 2px;">
                     -${abs(top_loss['Var COP']):,.0f} COP ({l_pct:+.2f}%)
                 </span>
             </div>
             """)
         else:
             motores_html.append("""
-            <div style="flex: 1; padding: 12px 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; margin: 5px; text-align: center; color: var(--text-muted); font-size: 13px;">
+            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 10px; margin: 5px; text-align: center; color: #9CA3AF !important; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
                 Sin pérdidas significativas hoy.
             </div>
             """)
