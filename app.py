@@ -2082,6 +2082,147 @@ with tab_cuadro:
         else:
             st.warning("⚡ Datos Históricos Insuficientes: Se requieren al menos 3 días de registros en la base de datos para calcular y renderizar las métricas profesionales de volatilidad y eficiencia.")
 
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    with st.expander("📝 INFORME DIARIO DE ATRIBUCIÓN CONTABLE & DESGLOSE FINANCIERO", expanded=True):
+        es_fin_de_semana = datetime.now().weekday() >= 5
+        
+        # 1. Cabecera Informativa de Fin de Semana o Día Activo
+        if es_fin_de_semana:
+            st.markdown("""
+            <div style="background-color: rgba(245, 158, 11, 0.08); border-left: 4px solid #F59E0B; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                <span style="color: #F59E0B; font-weight: 700; font-size: 13px; display: block; margin-bottom: 4px;">📅 NOTA DE MERCADO: FIN DE SEMANA ACTIVO</span>
+                <span style="color: var(--text-color); font-size: 11.5px; line-height: 1.4; display: block; opacity: 0.85;">
+                    Hoy es fin de semana y los mercados tradicionales de renta variable y divisas están cerrados. Los saldos y el P&G diario mostrados corresponden al <b>cierre oficial del último día hábil (Viernes vs Jueves)</b>. El P&G diario en vivo se restablecerá y reanudará el próximo Lunes por la mañana con la apertura de los mercados globales.
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background-color: rgba(16, 185, 129, 0.08); border-left: 4px solid #10B981; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                <span style="color: #10B981; font-weight: 700; font-size: 13px; display: block; margin-bottom: 4px;">⚡ REPORTE DE MERCADO ACTIVO EN VIVO</span>
+                <span style="color: var(--text-color); font-size: 11.5px; line-height: 1.4; display: block; opacity: 0.85;">
+                    Los saldos y variaciones diarias se actualizan automáticamente en tiempo real (cada 5 minutos) en concordancia con los movimientos de Wall Street, la BVC, los mercados de criptomonedas y la cotización actual del dólar (TRM).
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        # 2. Resumen Ejecutivo de Variación
+        signo_total = "+" if var_total_cop >= 0 else ""
+        color_total = "#10B981" if var_total_cop >= 0 else "#EF4444"
+        
+        st.markdown(f"""
+        <div style="text-align: center; padding: 15px 10px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 15px; box-shadow: var(--shadow);">
+            <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">P&G DIARIO NETO CONSOLIDADO (Último Cierre)</span>
+            <span style="font-size: 28px; font-weight: 800; color: {color_total}; display: block; margin-bottom: 2px;">
+                {signo_total}${var_total_cop:,.0f} COP
+            </span>
+            <span style="font-size: 11.5px; font-weight: 600; color: var(--text-muted);">
+                Patrimonio Líquido Actual: <b>${patrimonio_liquido:,.0f} COP</b>
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 3. Desglose Contable por Efectos (Mercado vs Divisa)
+        c_inf1, c_inf2 = st.columns(2)
+        
+        with c_inf1:
+            signo_m = "+" if efecto_mercado_total >= 0 else ""
+            color_m = "#10B981" if efecto_mercado_total >= 0 else "#EF4444"
+            st.markdown(f"""
+            <div style="padding: 12px 16px; background: rgba(99, 102, 241, 0.03); border: 1px solid var(--border-color); border-radius: 8px; min-height: 100px;">
+                <span style="font-size: 10.5px; font-weight: 800; color: #6366F1; text-transform: uppercase; display: block; margin-bottom: 4px;">📈 EFECTO MERCADO (Valorización)</span>
+                <span style="font-size: 18px; font-weight: 800; color: {color_m}; display: block; margin-bottom: 4px;">
+                    {signo_m}${efecto_mercado_total:,.0f} COP
+                </span>
+                <span style="font-size: 10px; color: var(--text-muted); display: block; line-height: 1.3;">
+                    Variación patrimonial neta causada por el alza o la baja de las acciones, commodities y criptomonedas en su moneda nativa.
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with c_inf2:
+            signo_d = "+" if efecto_divisa_total >= 0 else ""
+            color_d = "#10B981" if efecto_divisa_total >= 0 else "#EF4444"
+            st.markdown(f"""
+            <div style="padding: 12px 16px; background: rgba(6, 182, 212, 0.03); border: 1px solid var(--border-color); border-radius: 8px; min-height: 100px;">
+                <span style="font-size: 10.5px; font-weight: 800; color: #06B6D4; text-transform: uppercase; display: block; margin-bottom: 4px;">💵 EFECTO DIVISA (Diferencia en Cambio)</span>
+                <span style="font-size: 18px; font-weight: 800; color: {color_d}; display: block; margin-bottom: 4px;">
+                    {signo_d}${efecto_divisa_total:,.0f} COP
+                </span>
+                <span style="font-size: 10px; color: var(--text-muted); display: block; line-height: 1.3;">
+                    Impacto financiero neto en pesos derivado exclusivamente de las fluctuaciones de la TRM (USD/COP) sobre activos extranjeros.
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        # 4. Detalle y Atribución Divisa (Fórmula Financiera Explicativa)
+        var_trm = trm_dia - trm_yesterday
+        exposicion_usd_real = val_usd_total_cop / trm_dia if trm_dia > 0 else 0.0
+        
+        st.markdown(f"""
+        <div style="margin-top: 15px; padding: 12px 16px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px;">
+            <span style="font-size: 11px; font-weight: 800; color: var(--text-color); text-transform: uppercase; display: block; margin-bottom: 6px;">🔍 ATRIBUCIÓN CAMBIARIA Y CÁLCULO DE LA DIVISA</span>
+            <div style="font-size: 11px; color: var(--text-color); line-height: 1.5; opacity: 0.9;">
+                • <b>Exposición Total al Dólar:</b> {pct_usd_exposure:.1f}% del portafolio líquido (<b>${exposicion_usd_real:,.2f} USD</b> equivalente a <b>${val_usd_total_cop:,.0f} COP</b>).<br>
+                • <b>TRM Cierre Hoy:</b> ${trm_dia:,.2f} COP | <b>TRM Cierre Anterior:</b> ${trm_yesterday:,.2f} COP.<br>
+                • <b>Variación Neta de Tasa:</b> <span style="color: {'#10B981' if var_trm >= 0 else '#EF4444'}; font-weight: 700;">{var_trm:+,.2f} COP por dólar</span>.<br>
+                <div style="margin-top: 6px; padding: 6px 10px; background: {'rgba(255, 255, 255, 0.02)' if modo_oscuro else 'rgba(0, 0, 0, 0.02)'}; border-radius: 4px; font-family: monospace; font-size: 10px; font-weight: 600;">
+                    Atribución Cambiaria = Exposición USD ({exposicion_usd_real:,.2f}) × Variación TRM ({var_trm:+,.2f} COP) = {signo_d}${efecto_divisa_total:,.0f} COP
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 5. Motores del Día (Top Gainers and Losers)
+        gains_df = maestro_df[maestro_df["Var COP"] > 0.01].sort_values("Var COP", ascending=False)
+        losses_df = maestro_df[maestro_df["Var COP"] < -0.01].sort_values("Var COP", ascending=True)
+        
+        motores_html = []
+        if not gains_df.empty:
+            top_gain = gains_df.iloc[0]
+            g_pct = (top_gain["Var COP"] / (top_gain["Total_COP"] - top_gain["Var COP"]) * 100) if (top_gain["Total_COP"] - top_gain["Var COP"]) > 0 else 0.0
+            motores_html.append(f"""
+            <div style="flex: 1; padding: 10px; background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 6px; margin: 4px;">
+                <span style="font-size: 9.5px; font-weight: 800; color: #10B981; text-transform: uppercase; display: block;">🚀 MAYOR IMPULSOR POSITIVO</span>
+                <span style="font-size: 12px; font-weight: 700; color: var(--text-color); display: block; margin-top: 2px;">{top_gain['Ticker']} ({top_gain['Clase']})</span>
+                <span style="font-size: 11px; font-weight: 700; color: #10B981; display: block; margin-top: 1px;">
+                    +${top_gain['Var COP']:,.0f} COP ({g_pct:+.2f}%)
+                </span>
+            </div>
+            """)
+        else:
+            motores_html.append("""
+            <div style="flex: 1; padding: 10px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; margin: 4px; text-align: center; color: var(--text-muted); font-size: 11px;">
+                Sin ganancias significativas hoy.
+            </div>
+            """)
+            
+        if not losses_df.empty:
+            top_loss = losses_df.iloc[0]
+            l_pct = (top_loss["Var COP"] / (top_loss["Total_COP"] - top_loss["Var COP"]) * 100) if (top_loss["Total_COP"] - top_loss["Var COP"]) > 0 else 0.0
+            motores_html.append(f"""
+            <div style="flex: 1; padding: 10px; background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 6px; margin: 4px;">
+                <span style="font-size: 9.5px; font-weight: 800; color: #EF4444; text-transform: uppercase; display: block;">⚠️ MAYOR IMPULSOR NEGATIVO</span>
+                <span style="font-size: 12px; font-weight: 700; color: var(--text-color); display: block; margin-top: 2px;">{top_loss['Ticker']} ({top_loss['Clase']})</span>
+                <span style="font-size: 11px; font-weight: 700; color: #EF4444; display: block; margin-top: 1px;">
+                    -${abs(top_loss['Var COP']):,.0f} COP ({l_pct:+.2f}%)
+                </span>
+            </div>
+            """)
+        else:
+            motores_html.append("""
+            <div style="flex: 1; padding: 10px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; margin: 4px; text-align: center; color: var(--text-muted); font-size: 11px;">
+                Sin pérdidas significativas hoy.
+            </div>
+            """)
+            
+        st.markdown(f"""
+        <div style="margin-top: 15px; display: flex; flex-direction: row; justify-content: space-between;">
+            {motores_html[0]}
+            {motores_html[1]}
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>4. TENDENCIAS HISTÓRICAS SEGMENTADAS (Evolución Detallada por Componente)</p>", unsafe_allow_html=True)
