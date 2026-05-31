@@ -418,9 +418,19 @@ st.markdown(f"""
         font-weight: 600 !important;
     }}
     
-    /* Forzar visibilidad de títulos de expanders y flechas indicadoras */
-    div[data-testid="stExpander"] details summary {{
+    /* Forzar visibilidad, transparencia y evitar recuadros blancos en expanders */
+    div[data-testid="stExpander"],
+    div[data-testid="stExpander"] > details,
+    div[data-testid="stExpander"] details summary,
+    div[data-testid="stExpander"] details[open] summary,
+    div[data-testid="stExpander"] details summary:hover,
+    div[data-testid="stExpander"] details summary:focus,
+    div[data-testid="stExpander"] details summary:active {{
+        background-color: transparent !important;
+        background: transparent !important;
         color: var(--text-color) !important;
+        border: none !important;
+        box-shadow: none !important;
     }}
     div[data-testid="stExpander"] details summary svg {{
         fill: var(--text-color) !important;
@@ -2196,7 +2206,7 @@ with tab_cuadro:
             top_gain = gains_df.iloc[0]
             g_pct = (top_gain["Var COP"] / (top_gain["Total_COP"] - top_gain["Var COP"]) * 100) if (top_gain["Total_COP"] - top_gain["Var COP"]) > 0 else 0.0
             motores_html.append(f"""
-            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid rgba(16, 185, 129, 0.3) !important; border-radius: 10px; margin: 5px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
+            <div style="width: 100%; padding: 14px 16px; background-color: #111827 !important; border: 1px solid rgba(16, 185, 129, 0.3) !important; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
                 <span style="font-size: 11px; font-weight: 800; color: #10B981 !important; text-transform: uppercase; display: block;">🚀 MAYOR IMPULSOR POSITIVO</span>
                 <span style="font-size: 14.5px; font-weight: 700; color: #F3F4F6 !important; display: block; margin-top: 3px;">{top_gain['Ticker']} ({top_gain['Clase']})</span>
                 <span style="font-size: 13px; font-weight: 700; color: #10B981 !important; display: block; margin-top: 2px;">
@@ -2206,7 +2216,7 @@ with tab_cuadro:
             """)
         else:
             motores_html.append("""
-            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 10px; margin: 5px; text-align: center; color: #9CA3AF !important; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
+            <div style="width: 100%; padding: 14px 16px; background-color: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 10px; text-align: center; color: #9CA3AF !important; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
                 Sin ganancias significativas hoy.
             </div>
             """)
@@ -2215,7 +2225,7 @@ with tab_cuadro:
             top_loss = losses_df.iloc[0]
             l_pct = (top_loss["Var COP"] / (top_loss["Total_COP"] - top_loss["Var COP"]) * 100) if (top_loss["Total_COP"] - top_loss["Var COP"]) > 0 else 0.0
             motores_html.append(f"""
-            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important; border-radius: 10px; margin: 5px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
+            <div style="width: 100%; padding: 14px 16px; background-color: #111827 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
                 <span style="font-size: 11px; font-weight: 800; color: #EF4444 !important; text-transform: uppercase; display: block;">⚠️ MAYOR IMPULSOR NEGATIVO</span>
                 <span style="font-size: 14.5px; font-weight: 700; color: #F3F4F6 !important; display: block; margin-top: 3px;">{top_loss['Ticker']} ({top_loss['Clase']})</span>
                 <span style="font-size: 13px; font-weight: 700; color: #EF4444 !important; display: block; margin-top: 2px;">
@@ -2225,17 +2235,16 @@ with tab_cuadro:
             """)
         else:
             motores_html.append("""
-            <div style="flex: 1; padding: 14px 16px; background-color: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 10px; margin: 5px; text-align: center; color: #9CA3AF !important; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
+            <div style="width: 100%; padding: 14px 16px; background-color: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 10px; text-align: center; color: #9CA3AF !important; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;">
                 Sin pérdidas significativas hoy.
             </div>
             """)
             
-        st.markdown(f"""
-        <div style="margin-top: 15px; display: flex; flex-direction: row; justify-content: space-between;">
-            {motores_html[0]}
-            {motores_html[1]}
-        </div>
-        """, unsafe_allow_html=True)
+        col_mot1, col_mot2 = st.columns(2)
+        with col_mot1:
+            st.markdown(motores_html[0], unsafe_allow_html=True)
+        with col_mot2:
+            st.markdown(motores_html[1], unsafe_allow_html=True)
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -2318,6 +2327,13 @@ with tab_cuadro:
 with tab_records:
     st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>📋 LIBRO DETALLADO DE ACTIVOS & SALDOS DE CONTROL</p>", unsafe_allow_html=True)
     
+    # Colores explícitos para el iframe a fin de evitar problemas de herencia de variables CSS
+    c_texto = TEXT_COLOR
+    c_muted = TEXT_MUTED
+    c_borde = "rgba(255, 255, 255, 0.08)" if modo_oscuro else "rgba(0, 0, 0, 0.06)"
+    c_tarjeta = "rgba(17, 24, 39, 0.65)" if modo_oscuro else "rgba(255, 255, 255, 0.85)"
+    c_shadow = "0 4px 30px rgba(0, 0, 0, 0.35)" if modo_oscuro else "0 4px 20px rgba(0, 0, 0, 0.04)"
+    
     html_rows = []
     for idx, r in maestro_df.iterrows():
         t = r["Ticker"]
@@ -2362,7 +2378,7 @@ with tab_records:
             ef_m_color = "#EF4444"
         else:
             ef_m_sign = "▪"
-            ef_m_color = "var(--text-muted)"
+            ef_m_color = c_muted
         ef_m_str = f"<span style='color: {ef_m_color}; font-weight: 600;'>{ef_m_sign} ${abs(ef_m):,.0f}</span>"
         
         ef_d = r["Ef_Divisa"] if not pd.isna(r["Ef_Divisa"]) else 0.0
@@ -2374,20 +2390,20 @@ with tab_records:
             ef_d_color = "#EF4444"
         else:
             ef_d_sign = "▪"
-            ef_d_color = "var(--text-muted)"
+            ef_d_color = c_muted
         ef_d_str = f"<span style='color: {ef_d_color}; font-weight: 600;'>{ef_d_sign} ${abs(ef_d):,.0f}</span>"
         
         row_html = f"""
-        <tr style="border-bottom: 1px solid var(--border-color); transition: background 0.2s ease;">
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle;"><span style="font-weight: 600; font-size: 13px; letter-spacing: 0.2px; color: var(--text-color); padding: 4px 8px; border-radius: 6px; background: rgba(148, 163, 184, 0.08); border-left: 3px solid {c_color}; display: inline-block;">{t}</span></td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle;"><span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 550; color: #FFFFFF !important; background-color: {c_color}; text-transform: uppercase; letter-spacing: 0.3px;">{emoji} {c_name}</span></td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle; text-align: right; font-weight: 500; font-family: monospace; font-size: 13px;">{cant}</td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle; text-align: center;"><span style="display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; {curr_badge_style}">{moneda}</span></td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle; text-align: right; font-weight: 500; font-family: monospace; font-size: 13px;">{p_unit}</td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle; text-align: right; font-weight: 600; font-family: monospace; font-size: 13px; color: var(--text-color);">{tot_cop}</td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle;"><span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; {var_badge_style}">{var_str}</span></td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle; text-align: right; font-family: monospace; font-size: 13px;">{ef_m_str}</td>
-            <td style="padding: 14px 16px; font-size: 13px; color: var(--text-color); vertical-align: middle; text-align: right; font-family: monospace; font-size: 13px;">{ef_d_str}</td>
+        <tr style="border-bottom: 1px solid {c_borde}; transition: background 0.2s ease;">
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle;"><span style="font-weight: 600; font-size: 13px; letter-spacing: 0.2px; color: {c_texto}; padding: 4px 8px; border-radius: 6px; background: rgba(148, 163, 184, 0.08); border-left: 3px solid {c_color}; display: inline-block;">{t}</span></td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle;"><span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 550; color: #FFFFFF !important; background-color: {c_color}; text-transform: uppercase; letter-spacing: 0.3px;">{emoji} {c_name}</span></td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle; text-align: right; font-weight: 500; font-family: monospace; font-size: 13px;">{cant}</td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle; text-align: center;"><span style="display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; {curr_badge_style}">{moneda}</span></td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle; text-align: right; font-weight: 500; font-family: monospace; font-size: 13px;">{p_unit}</td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle; text-align: right; font-weight: 600; font-family: monospace; font-size: 13px; color: {c_texto};">{tot_cop}</td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle;"><span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; {var_badge_style}">{var_str}</span></td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle; text-align: right; font-family: monospace; font-size: 13px;">{ef_m_str}</td>
+            <td style="padding: 14px 16px; font-size: 13px; color: {c_texto}; vertical-align: middle; text-align: right; font-family: monospace; font-size: 13px;">{ef_d_str}</td>
         </tr>
         """
         html_rows.append(row_html)
@@ -2395,28 +2411,86 @@ with tab_records:
     table_content = "\n".join(html_rows)
     
     html_table = f"""
-    <div style="width: 100%; overflow-x: auto; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); box-shadow: var(--shadow); backdrop-filter: blur(12px); margin-top: 10px; margin-bottom: 20px;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
-            <thead>
-                <tr>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color);">Ticker</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color);">Clase de Activo</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color); text-align: right;">Cantidad</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color); text-align: center;">Moneda</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color); text-align: right;">Precio Unitario</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color); text-align: right;">Valor Total (COP)</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color);">% Var Diario (COP)</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color); text-align: right;">Ef. Mercado</th>
-                    <th style="background: rgba(148, 163, 184, 0.08); padding: 14px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color); letter-spacing: 0.8px; border-bottom: 2px solid var(--border-color); text-align: right;">Ef. Divisa</th>
-                </tr>
-            </thead>
-            <tbody>
-                {table_content}
-            </tbody>
-        </table>
-    </div>
+    <!DOCTYPE html>
+    <html style="background-color: {BG_COLOR} !important; background: {BG_COLOR} !important;">
+    <head>
+        <meta charset="utf-8">
+        <style>
+        html, body {{
+            background-color: {BG_COLOR} !important;
+            background: {BG_COLOR} !important;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: {c_texto};
+        }}
+        /* Estilos Premium para la Tabla de Activos */
+        .premium-table-container {{
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid {c_borde};
+            background: {c_tarjeta};
+            box-shadow: {c_shadow};
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }}
+        .premium-table {{
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }}
+        .premium-table th {{
+            background: rgba(148, 163, 184, 0.08);
+            padding: 14px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: {c_texto};
+            letter-spacing: 0.8px;
+            border-bottom: 2px solid {c_borde};
+        }}
+        .premium-table td {{
+            padding: 14px 16px;
+            font-size: 13px;
+            color: {c_texto};
+            border-bottom: 1px solid {c_borde};
+            vertical-align: middle;
+        }}
+        .premium-table tr:last-child td {{
+            border-bottom: none;
+        }}
+        .premium-table tr:hover {{
+            background: rgba(99, 102, 241, 0.04);
+            transition: background 0.2s ease;
+        }}
+        </style>
+    </head>
+    <body>
+        <div class="premium-table-container">
+            <table class="premium-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Ticker</th>
+                        <th style="text-align: left;">Clase de Activo</th>
+                        <th style="text-align: right;">Cantidad</th>
+                        <th style="text-align: center;">Moneda</th>
+                        <th style="text-align: right;">Precio Unitario</th>
+                        <th style="text-align: right;">Valor Total (COP)</th>
+                        <th style="text-align: left;">% Var Diario (COP)</th>
+                        <th style="text-align: right;">Ef. Mercado</th>
+                        <th style="text-align: right;">Ef. Divisa</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_content}
+                </tbody>
+            </table>
+        </div>
+    </body>
+    </html>
     """
-    st.markdown(html_table, unsafe_allow_html=True)
+    st.components.v1.html(html_table, height=920, scrolling=True)
 
 # -----------------------------------------------------------------------------
 # TAB 3: RADAR DE NOTICIAS & INTELIGENCIA DE MERCADO
