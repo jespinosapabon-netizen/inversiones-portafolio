@@ -1074,15 +1074,60 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     # Save successfully resolved prices to cache
     guardar_cache_precios(precios, variaciones)
     
-    # Extract TRM (today and yesterday for accurate daily changes)
-    trm_dia = precios.get(trm_ticker, 3950.0)
-    trm_yesterday = trm_dia
+    # -------------------------------------------------------------------------
+    # SISTEMA DE CACHÉ DE TRM CON TRANSICIÓN DIARIA Y PREVENCIÓN DE SOBREESCRITURA
+    # -------------------------------------------------------------------------
+    trm_dia_yf = precios.get(trm_ticker, 3950.0)
+    trm_yesterday_yf = trm_dia_yf
     try:
         df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
         if df_trm is not None and not df_trm.empty:
             close_col_trm = df_trm["Close"].dropna()
             if len(close_col_trm) >= 2:
-                trm_yesterday = float(close_col_trm.iloc[-2])
+                trm_yesterday_yf = float(close_col_trm.iloc[-2])
+    except Exception:
+        pass
+
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    cache = cargar_cache_precios()
+    
+    trm_dia_cached = cache.get("_trm_dia")
+    trm_yesterday_cached = cache.get("_trm_yesterday")
+    
+    trm_dia = trm_dia_yf
+    trm_yesterday = trm_yesterday_yf
+    
+    if trm_dia_cached is not None:
+        last_trm_dia = trm_dia_cached["precio"]
+        last_trm_date = trm_dia_cached["date"]
+        
+        if last_trm_date < current_date:
+            # Transición de día: la TRM de hoy de la última sesión pasa a ser la tasa de comparación de ayer
+            trm_yesterday = last_trm_dia
+            cache["_trm_yesterday"] = {
+                "precio": trm_yesterday,
+                "date": last_trm_date
+            }
+        else:
+            # Mismo día: cargamos la TRM de ayer registrada previamente en la caché
+            if trm_yesterday_cached is not None:
+                trm_yesterday = trm_yesterday_cached["precio"]
+            else:
+                trm_yesterday = trm_yesterday_yf
+    else:
+        # Primera ejecución: usamos el fallback de yfinance
+        trm_yesterday = trm_yesterday_yf
+        
+    # Guardamos en caché la TRM resuelta de hoy con su fecha correspondiente
+    cache["_trm_dia"] = {
+        "precio": trm_dia,
+        "date": current_date
+    }
+    
+    # Escribimos los metadatos de TRM de forma persistente en el archivo
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=4)
     except Exception:
         pass
     
