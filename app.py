@@ -6,7 +6,8 @@ import requests
 import yfinance as yf
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+COL_TZ = timezone(timedelta(hours=-5))
 
 # CONFIGURACIÓN DEL FRAMEWORK INTERNA (PRIMERA INSTRUCCIÓN OBLIGATORIA)
 st.set_page_config(
@@ -271,7 +272,7 @@ def guardar_cache_precios(precios, variaciones):
         cache[t] = {
             "precio": precios[t],
             "variacion": variaciones.get(t, 0.0),
-            "actualizado": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "actualizado": datetime.now(COL_TZ).strftime("%Y-%m-%d %H:%M:%S")
         }
     try:
         with open(CACHE_FILE, "w") as f:
@@ -1088,7 +1089,7 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     except Exception:
         pass
 
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.now(COL_TZ).strftime("%Y-%m-%d")
     cache = cargar_cache_precios()
     
     trm_dia_cached = cache.get("_trm_dia")
@@ -1481,7 +1482,7 @@ orden_categorias = ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Comm
 df_cambio_clase["sort_cat"] = df_cambio_clase["Clase"].apply(lambda x: orden_categorias.index(x) if x in orden_categorias else 99)
 df_cambio_clase = df_cambio_clase.sort_values("sort_cat").reset_index(drop=True)
 
-hoy_datetime = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
+hoy_datetime = pd.to_datetime(datetime.now(COL_TZ).strftime("%Y-%m-%d"))
 
 # 1. Cargar Historial
 df_hist_base = cargar_historial()
@@ -2154,7 +2155,7 @@ with tab_cuadro:
 
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     with st.expander("📝 INFORME DIARIO DE ATRIBUCIÓN CONTABLE & DESGLOSE FINANCIERO", expanded=True):
-        es_fin_de_semana = datetime.now().weekday() >= 5
+        es_fin_de_semana = datetime.now(COL_TZ).weekday() >= 5
         
         # 1. Cabecera Informativa de Fin de Semana o Día Activo
         if es_fin_de_semana:
