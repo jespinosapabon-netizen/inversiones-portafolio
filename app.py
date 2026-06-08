@@ -113,56 +113,67 @@ def cargar_inventario():
     if usar_base_datos():
         engine = obtener_engine()
         if engine is not None:
-            try:
-                # Comprobar si la tabla existe, si no, crearla
-                with engine.begin() as conn:
-                    conn.exec_driver_sql("""
-                        CREATE TABLE IF NOT EXISTS inventario_activos (
-                            "Ticker" VARCHAR(50) PRIMARY KEY,
-                            "Clase" VARCHAR(100),
-                            "Cantidad" DOUBLE PRECISION,
-                            "Valor_Base_Fijo" DOUBLE PRECISION,
-                            "Moneda" VARCHAR(10),
-                            "Var_Manual" DOUBLE PRECISION DEFAULT 0.0
-                        )
-                    """)
+            import time
+            for intento in range(5):
+                try:
+                    # Comprobar si la tabla existe, si no, crearla
+                    with engine.begin() as conn:
+                        conn.exec_driver_sql("""
+                            CREATE TABLE IF NOT EXISTS inventario_activos (
+                                "Ticker" VARCHAR(50) PRIMARY KEY,
+                                "Clase" VARCHAR(100),
+                                "Cantidad" DOUBLE PRECISION,
+                                "Valor_Base_Fijo" DOUBLE PRECISION,
+                                "Moneda" VARCHAR(10),
+                                "Var_Manual" DOUBLE PRECISION DEFAULT 0.0
+                            )
+                        """)
+                        
+                        # Garantizar que la columna exista en bases de datos ya creadas
+                        try:
+                            conn.exec_driver_sql('ALTER TABLE inventario_activos ADD COLUMN IF NOT EXISTS "Var_Manual" DOUBLE PRECISION DEFAULT 0.0')
+                        except Exception:
+                            pass
+                        
+                        # Comprobar si está vacía
+                        count = conn.exec_driver_sql("SELECT COUNT(*) FROM inventario_activos").scalar()
+                        if count == 0:
+                            df_defecto = pd.read_csv(CSV_FILE) if os.path.exists(CSV_FILE) else pd.DataFrame([
+                                {"Ticker": "IONQ", "Clase": "Acciones EEUU", "Cantidad": 53.40812, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "GOOG", "Clase": "Acciones EEUU", "Cantidad": 36.19290, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "UNH", "Clase": "Acciones EEUU", "Cantidad": 23.83395, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "V", "Clase": "Acciones EEUU", "Cantidad": 9.10111, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "MSFT", "Clase": "Acciones EEUU", "Cantidad": 10.84953, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "GLD", "Clase": "Commodities (Oro)", "Cantidad": 48.53481, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 75760.0, "Moneda": "COP"},
+                                {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 15500.0, "Moneda": "COP"},
+                                {"Ticker": "PFGRUPOARG", "Clase": "Acciones Colombia", "Cantidad": 2199.0, "Valor_Base_Fijo": 11500.0, "Moneda": "COP"},
+                                {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 52244.0, "Moneda": "COP"},
+                                {"Ticker": "PEI", "Clase": "Acciones Colombia", "Cantidad": 388.0, "Valor_Base_Fijo": 62000.0, "Moneda": "COP"},
+                                {"Ticker": "BTC", "Clase": "Criptomonedas", "Cantidad": 0.13078689, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "ETH", "Clase": "Criptomonedas", "Cantidad": 0.57562952, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "ADA", "Clase": "Criptomonedas", "Cantidad": 765.10032522, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "XRP", "Clase": "Criptomonedas", "Cantidad": 82.24143446, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
+                                {"Ticker": "Fiducuenta Bancolombia", "Clase": "Fondos de Inversión", "Cantidad": 1.0, "Valor_Base_Fijo": 1362452901.0, "Moneda": "COP"},
+                                {"Ticker": "Disponible Broker Col", "Clase": "Liquidez COP", "Cantidad": 1.0, "Valor_Base_Fijo": 46506461.0, "Moneda": "COP"},
+                                {"Ticker": "Broker EEUU", "Clase": "Liquidez USD", "Cantidad": 1.0, "Valor_Base_Fijo": 12500.0, "Moneda": "USD"},
+                                {"Ticker": "Apto Avenida Park", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 950000000.0, "Moneda": "COP"},
+                                {"Ticker": "Apto Mediterranea", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 360000000.0, "Moneda": "COP"}
+                            ])
+                            df_defecto.to_sql("inventario_activos", engine, if_exists="append", index=False)
                     
-                    # Garantizar que la columna exista en bases de datos ya creadas
+                    return pd.read_sql("SELECT * FROM inventario_activos", engine)
+                except Exception as e:
                     try:
-                        conn.exec_driver_sql('ALTER TABLE inventario_activos ADD COLUMN IF NOT EXISTS "Var_Manual" DOUBLE PRECISION DEFAULT 0.0')
+                        engine.dispose()
                     except Exception:
                         pass
-                    
-                    # Comprobar si está vacía
-                    count = conn.exec_driver_sql("SELECT COUNT(*) FROM inventario_activos").scalar()
-                    if count == 0:
-                        df_defecto = pd.read_csv(CSV_FILE) if os.path.exists(CSV_FILE) else pd.DataFrame([
-                            {"Ticker": "IONQ", "Clase": "Acciones EEUU", "Cantidad": 53.40812, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "GOOG", "Clase": "Acciones EEUU", "Cantidad": 36.19290, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "UNH", "Clase": "Acciones EEUU", "Cantidad": 23.83395, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "V", "Clase": "Acciones EEUU", "Cantidad": 9.10111, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "MSFT", "Clase": "Acciones EEUU", "Cantidad": 10.84953, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "GLD", "Clase": "Commodities (Oro)", "Cantidad": 48.53481, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "CIBEST", "Clase": "Acciones Colombia", "Cantidad": 360.0, "Valor_Base_Fijo": 75760.0, "Moneda": "COP"},
-                            {"Ticker": "GRUPOARGOS", "Clase": "Acciones Colombia", "Cantidad": 31.0, "Valor_Base_Fijo": 15500.0, "Moneda": "COP"},
-                            {"Ticker": "PFGRUPOARG", "Clase": "Acciones Colombia", "Cantidad": 2199.0, "Valor_Base_Fijo": 11500.0, "Moneda": "COP"},
-                            {"Ticker": "GXTESCOL", "Clase": "Acciones Colombia", "Cantidad": 88.0, "Valor_Base_Fijo": 52244.0, "Moneda": "COP"},
-                            {"Ticker": "PEI", "Clase": "Acciones Colombia", "Cantidad": 388.0, "Valor_Base_Fijo": 62000.0, "Moneda": "COP"},
-                            {"Ticker": "BTC", "Clase": "Criptomonedas", "Cantidad": 0.13078689, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "ETH", "Clase": "Criptomonedas", "Cantidad": 0.57562952, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "ADA", "Clase": "Criptomonedas", "Cantidad": 765.10032522, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "XRP", "Clase": "Criptomonedas", "Cantidad": 82.24143446, "Valor_Base_Fijo": 0.0, "Moneda": "USD"},
-                            {"Ticker": "Fiducuenta Bancolombia", "Clase": "Fondos de Inversión", "Cantidad": 1.0, "Valor_Base_Fijo": 1362452901.0, "Moneda": "COP"},
-                            {"Ticker": "Disponible Broker Col", "Clase": "Liquidez COP", "Cantidad": 1.0, "Valor_Base_Fijo": 46506461.0, "Moneda": "COP"},
-                            {"Ticker": "Broker EEUU", "Clase": "Liquidez USD", "Cantidad": 1.0, "Valor_Base_Fijo": 12500.0, "Moneda": "USD"},
-                            {"Ticker": "Apto Avenida Park", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 950000000.0, "Moneda": "COP"},
-                            {"Ticker": "Apto Mediterranea", "Clase": "Propiedad Raíz", "Cantidad": 1.0, "Valor_Base_Fijo": 360000000.0, "Moneda": "COP"}
-                        ])
-                        df_defecto.to_sql("inventario_activos", engine, if_exists="append", index=False)
-                
-                return pd.read_sql("SELECT * FROM inventario_activos", engine)
-            except Exception as e:
-                st.warning(f"Error al leer inventario de base de datos (usando CSV local): {e}")
+                    if intento < 4:
+                        if intento == 0:
+                            st.info("Conectando con la base de datos en la nube (Neon)... por favor espera unos segundos.")
+                        time.sleep(2.0)
+                    else:
+                        st.warning(f"Error al leer inventario de base de datos (usando CSV local): {e}")
                 
     inicializar_archivos_disco()
     return pd.read_csv(CSV_FILE)
@@ -171,38 +182,56 @@ def guardar_inventario(df):
     if usar_base_datos():
         engine = obtener_engine()
         if engine is not None:
-            try:
-                df.to_sql("inventario_activos", engine, if_exists="replace", index=False)
-                return
-            except Exception as e:
-                st.warning(f"Error al escribir inventario en base de datos: {e}")
+            import time
+            for intento in range(3):
+                try:
+                    df.to_sql("inventario_activos", engine, if_exists="replace", index=False)
+                    return
+                except Exception as e:
+                    try:
+                        engine.dispose()
+                    except Exception:
+                        pass
+                    if intento < 2:
+                        time.sleep(2.0)
+                    else:
+                        st.warning(f"Error al escribir inventario en base de datos: {e}")
     df.to_csv(CSV_FILE, index=False)
 
 def cargar_historial():
     if usar_base_datos():
         engine = obtener_engine()
         if engine is not None:
-            try:
-                with engine.begin() as conn:
-                    conn.exec_driver_sql("""
-                        CREATE TABLE IF NOT EXISTS historial_patrimonio (
-                            "Fecha" DATE,
-                            "Clase" VARCHAR(100),
-                            "Valor_COP" DOUBLE PRECISION,
-                            PRIMARY KEY ("Fecha", "Clase")
-                        )
-                    """)
+            import time
+            for intento in range(5):
+                try:
+                    with engine.begin() as conn:
+                        conn.exec_driver_sql("""
+                            CREATE TABLE IF NOT EXISTS historial_patrimonio (
+                                "Fecha" DATE,
+                                "Clase" VARCHAR(100),
+                                "Valor_COP" DOUBLE PRECISION,
+                                PRIMARY KEY ("Fecha", "Clase")
+                            )
+                        """)
+                        
+                        count = conn.exec_driver_sql("SELECT COUNT(*) FROM historial_patrimonio").scalar()
+                        if count == 0:
+                            df_hist_defecto = pd.read_csv(HIST_FILE) if os.path.exists(HIST_FILE) else pd.DataFrame([])
+                            df_hist_defecto.to_sql("historial_patrimonio", engine, if_exists="append", index=False)
                     
-                    count = conn.exec_driver_sql("SELECT COUNT(*) FROM historial_patrimonio").scalar()
-                    if count == 0:
-                        df_hist_defecto = pd.read_csv(HIST_FILE) if os.path.exists(HIST_FILE) else pd.DataFrame([])
-                        df_hist_defecto.to_sql("historial_patrimonio", engine, if_exists="append", index=False)
-                
-                df_db = pd.read_sql("SELECT * FROM historial_patrimonio", engine)
-                df_db["Fecha"] = pd.to_datetime(df_db["Fecha"])
-                return df_db
-            except Exception as e:
-                st.warning(f"Error al leer historial de base de datos (usando CSV local): {e}")
+                    df_db = pd.read_sql("SELECT * FROM historial_patrimonio", engine)
+                    df_db["Fecha"] = pd.to_datetime(df_db["Fecha"])
+                    return df_db
+                except Exception as e:
+                    try:
+                        engine.dispose()
+                    except Exception:
+                        pass
+                    if intento < 4:
+                        time.sleep(2.0)
+                    else:
+                        st.warning(f"Error al leer historial de base de datos (usando CSV local): {e}")
                 
     inicializar_archivos_disco()
     df_local = pd.read_csv(HIST_FILE)
@@ -213,14 +242,23 @@ def guardar_historial(df):
     if usar_base_datos():
         engine = obtener_engine()
         if engine is not None:
-            try:
-                df_save = df.copy()
-                if pd.api.types.is_datetime64_any_dtype(df_save["Fecha"]):
-                    df_save["Fecha"] = df_save["Fecha"].dt.strftime("%Y-%m-%d")
-                df_save.to_sql("historial_patrimonio", engine, if_exists="replace", index=False)
-                return
-            except Exception as e:
-                st.warning(f"Error al escribir historial en base de datos: {e}")
+            import time
+            for intento in range(3):
+                try:
+                    df_save = df.copy()
+                    if pd.api.types.is_datetime64_any_dtype(df_save["Fecha"]):
+                        df_save["Fecha"] = df_save["Fecha"].dt.strftime("%Y-%m-%d")
+                    df_save.to_sql("historial_patrimonio", engine, if_exists="replace", index=False)
+                    return
+                except Exception as e:
+                    try:
+                        engine.dispose()
+                    except Exception:
+                        pass
+                    if intento < 2:
+                        time.sleep(2.0)
+                    else:
+                        st.warning(f"Error al escribir historial en base de datos: {e}")
     df_save = df.copy()
     if pd.api.types.is_datetime64_any_dtype(df_save["Fecha"]):
         df_save["Fecha"] = df_save["Fecha"].dt.strftime("%Y-%m-%d")
