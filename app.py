@@ -2624,7 +2624,8 @@ with tab_transactions:
             st.subheader("➕ Agregar Nuevo Activo")
             f_ticker = st.text_input("Ticker ID (ej. AAPL, NVDA, ETH)").upper().strip()
             f_clase = st.selectbox("Categoría / Clase:", ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Liquidez COP", "Liquidez USD", "Propiedad Raíz"])
-            f_cant = st.number_input("Cantidad a Adquirir:", min_value=0.0, format="%.8f", value=0.0)
+            default_cant = 1.0 if f_clase in ["Fondos de Inversión", "Liquidez COP", "Liquidez USD", "Propiedad Raíz"] else 0.0
+            f_cant = st.number_input("Cantidad a Adquirir:", min_value=0.0, format="%.8f", value=default_cant)
             f_precio = st.number_input("Precio Unitario de Referencia:", min_value=0.0, format="%.4f", value=0.0)
             f_var_manual = 0.0
             
