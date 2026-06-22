@@ -1914,9 +1914,9 @@ with tab_cuadro:
     
     if not df_total_diario.empty:
         v_min, v_max = float(df_total_diario["Valor_COP"].min()), float(df_total_diario["Valor_COP"].max())
-        if v_min == v_max: limites_y = [v_min * 0.90, v_max * 1.10]
+        if v_min == v_max: limites_y = [v_min * 0.95, v_max * 1.05]
         else:
-            pad = (v_max - v_min) * 0.08
+            pad = max((v_max - v_min) * 0.15, v_max * 0.02)
             limites_y = [max(0.0, v_min - pad), v_max + pad]
             
         x_min, x_max = df_total_diario["Fecha"].min(), df_total_diario["Fecha"].max()
@@ -2305,7 +2305,7 @@ with tab_cuadro:
                     val_grupo_fiel = maestro_df[maestro_df["Clase_Linea"] == c_name]["Total_COP"].sum()
                     
                     s_min, s_max = float(df_sub["Valor_COP"].min()), float(df_sub["Valor_COP"].max())
-                    s_pad = (s_max - s_min) * 0.08 if s_max != s_min else s_max * 0.08
+                    s_pad = max((s_max - s_min) * 0.15, s_max * 0.02) if s_max != s_min else s_max * 0.05
                     
                     s_min_x, s_max_x = df_sub["Fecha"].min(), df_sub["Fecha"].max()
                     duration_s_x = s_max_x - s_min_x
