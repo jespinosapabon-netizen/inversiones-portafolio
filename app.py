@@ -1914,10 +1914,10 @@ with tab_cuadro:
     
     if not df_total_diario.empty:
         v_min, v_max = float(df_total_diario["Valor_COP"].min()), float(df_total_diario["Valor_COP"].max())
-        if v_min == v_max: limites_y = [v_min * 0.99, v_max * 1.01]
+        if v_min == v_max: limites_y = [v_min * 0.90, v_max * 1.10]
         else:
-            pad = (v_max - v_min) * 0.012
-            limites_y = [v_min - pad, v_max + pad]
+            pad = (v_max - v_min) * 0.08
+            limites_y = [max(0.0, v_min - pad), v_max + pad]
             
         x_min, x_max = df_total_diario["Fecha"].min(), df_total_diario["Fecha"].max()
         duration_x = x_max - x_min
@@ -2305,7 +2305,7 @@ with tab_cuadro:
                     val_grupo_fiel = maestro_df[maestro_df["Clase_Linea"] == c_name]["Total_COP"].sum()
                     
                     s_min, s_max = float(df_sub["Valor_COP"].min()), float(df_sub["Valor_COP"].max())
-                    s_pad = (s_max - s_min) * 0.012 if s_max != s_min else s_max * 0.01
+                    s_pad = (s_max - s_min) * 0.08 if s_max != s_min else s_max * 0.08
                     
                     s_min_x, s_max_x = df_sub["Fecha"].min(), df_sub["Fecha"].max()
                     duration_s_x = s_max_x - s_min_x
@@ -2348,7 +2348,7 @@ with tab_cuadro:
                         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", template=PLOTLY_TEMPLATE, height=270, hovermode="x unified",
                         margin=dict(t=10, b=25, l=65, r=40), showlegend=False,
                         xaxis=dict(type='date', range=limites_s_x, showgrid=False, tickformat="%d-%m", tickfont=dict(size=9, color=TEXT_MUTED)),
-                        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=[s_min - s_pad, s_max + s_pad], showticklabels=True, tickfont=dict(size=8, color=TEXT_MUTED), tickformat="$,.0f"),
+                        yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, autorange=False, range=[max(0.0, s_min - s_pad), s_max + s_pad], showticklabels=True, tickfont=dict(size=8, color=TEXT_MUTED), tickformat="$,.0f"),
                         font=dict(family="Inter, system-ui, sans-serif"),
                         hoverlabel=dict(
                             bgcolor="rgba(17, 24, 39, 0.95)" if modo_oscuro else "rgba(255, 255, 255, 0.95)",
