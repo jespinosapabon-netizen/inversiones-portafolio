@@ -1116,59 +1116,51 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     # -------------------------------------------------------------------------
     # SISTEMA DE CACHÉ DE TRM CON TRANSICIÓN DIARIA Y PREVENCIÓN DE SOBREESCRITURA
     # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # SISTEMA DE CACHÉ DE TRM CON PREVENCIÓN DE HUECOS DE USO
+    # -------------------------------------------------------------------------
     trm_dia_yf = precios.get(trm_ticker, 3950.0)
     trm_yesterday_yf = trm_dia_yf
+    trm_success = False
+    
     try:
         df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
         if df_trm is not None and not df_trm.empty:
             close_col_trm = df_trm["Close"].dropna()
             if len(close_col_trm) >= 2:
+                trm_dia_yf = float(close_col_trm.iloc[-1])
                 trm_yesterday_yf = float(close_col_trm.iloc[-2])
+                trm_success = True
     except Exception:
         pass
 
-    current_date = datetime.now(COL_TZ).strftime("%Y-%m-%d")
-    cache = cargar_cache_precios()
-    
-    trm_dia_cached = cache.get("_trm_dia")
-    trm_yesterday_cached = cache.get("_trm_yesterday")
-    
     trm_dia = trm_dia_yf
     trm_yesterday = trm_yesterday_yf
+    cache = cargar_cache_precios()
     
-    if trm_dia_cached is not None:
-        last_trm_dia = trm_dia_cached["precio"]
-        last_trm_date = trm_dia_cached["date"]
-        
-        if last_trm_date < current_date:
-            # Transición de día: la TRM de hoy de la última sesión pasa a ser la tasa de comparación de ayer
-            trm_yesterday = last_trm_dia
-            cache["_trm_yesterday"] = {
-                "precio": trm_yesterday,
-                "date": last_trm_date
-            }
-        else:
-            # Mismo día: cargamos la TRM de ayer registrada previamente en la caché
-            if trm_yesterday_cached is not None:
-                trm_yesterday = trm_yesterday_cached["precio"]
-            else:
-                trm_yesterday = trm_yesterday_yf
+    if trm_success:
+        # Si la descarga en vivo fue exitosa, guardamos los valores en caché
+        cache["_trm_dia"] = {
+            "precio": trm_dia,
+            "date": datetime.now(COL_TZ).strftime("%Y-%m-%d")
+        }
+        cache["_trm_yesterday"] = {
+            "precio": trm_yesterday,
+            "date": datetime.now(COL_TZ).strftime("%Y-%m-%d")
+        }
+        try:
+            with open(CACHE_FILE, "w") as f:
+                json.dump(cache, f, indent=4)
+        except Exception:
+            pass
     else:
-        # Primera ejecución: usamos el fallback de yfinance
-        trm_yesterday = trm_yesterday_yf
-        
-    # Guardamos en caché la TRM resuelta de hoy con su fecha correspondiente
-    cache["_trm_dia"] = {
-        "precio": trm_dia,
-        "date": current_date
-    }
-    
-    # Escribimos los metadatos de TRM de forma persistente en el archivo
-    try:
-        with open(CACHE_FILE, "w") as f:
-            json.dump(cache, f, indent=4)
-    except Exception:
-        pass
+        # Si falló la consulta en vivo, cargamos los valores persistentes de la caché
+        trm_dia_cached = cache.get("_trm_dia")
+        trm_yesterday_cached = cache.get("_trm_yesterday")
+        if trm_dia_cached is not None:
+            trm_dia = trm_dia_cached["precio"]
+        if trm_yesterday_cached is not None:
+            trm_yesterday = trm_yesterday_cached["precio"]
     
     # Clean global tickers results
     precios_global = {k: v for k, v in precios.items() if k != trm_ticker}
