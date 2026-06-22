@@ -1114,15 +1114,13 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     guardar_cache_precios(precios, variaciones)
     
     # -------------------------------------------------------------------------
-    # SISTEMA DE CACHÉ DE TRM CON TRANSICIÓN DIARIA Y PREVENCIÓN DE SOBREESCRITURA
-    # -------------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-    # SISTEMA DE CACHÉ DE TRM CON PREVENCIÓN DE HUECOS DE USO
+    # SISTEMA DE CACHÉ DE TRM (SPOT RATE) CON FALLBACK DE EXCHANGERATE-API
     # -------------------------------------------------------------------------
     trm_dia_yf = precios.get(trm_ticker, 3950.0)
     trm_yesterday_yf = trm_dia_yf
     trm_success = False
     
+    # 1. Intentar obtener la TRM/Spot desde yfinance (tiempo real al minuto)
     try:
         df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
         if df_trm is not None and not df_trm.empty:
@@ -1134,12 +1132,24 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     except Exception:
         pass
 
-    trm_dia = trm_dia_yf
-    trm_yesterday = trm_yesterday_yf
+    # 2. Si yfinance falló (común en Streamlit Cloud por bloqueos), usar ExchangeRate-API como fallback en vivo
+    trm_dia_fallback = None
+    if not trm_success:
+        try:
+            res_api = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5)
+            if res_api.status_code == 200:
+                data_api = res_api.json()
+                trm_dia_fallback = float(data_api["rates"].get("COP"))
+        except Exception:
+            pass
+
     cache = cargar_cache_precios()
     
     if trm_success:
-        # Si la descarga en vivo fue exitosa, guardamos los valores en caché
+        trm_dia = trm_dia_yf
+        trm_yesterday = trm_yesterday_yf
+        
+        # Guardamos en caché para cuando yfinance falle
         cache["_trm_dia"] = {
             "precio": trm_dia,
             "date": datetime.now(COL_TZ).strftime("%Y-%m-%d")
@@ -1153,14 +1163,35 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
                 json.dump(cache, f, indent=4)
         except Exception:
             pass
-    else:
-        # Si falló la consulta en vivo, cargamos los valores persistentes de la caché
-        trm_dia_cached = cache.get("_trm_dia")
+            
+    elif trm_dia_fallback is not None:
+        # yfinance falló pero ExchangeRate-API funcionó
+        trm_dia = trm_dia_fallback
+        
+        # Intentamos obtener la de ayer de la caché, o del fallback de yfinance
         trm_yesterday_cached = cache.get("_trm_yesterday")
-        if trm_dia_cached is not None:
-            trm_dia = trm_dia_cached["precio"]
         if trm_yesterday_cached is not None:
             trm_yesterday = trm_yesterday_cached["precio"]
+        else:
+            trm_yesterday = trm_yesterday_yf
+            
+        # Actualizamos la caché con la nueva TRM en vivo
+        cache["_trm_dia"] = {
+            "precio": trm_dia,
+            "date": datetime.now(COL_TZ).strftime("%Y-%m-%d")
+        }
+        try:
+            with open(CACHE_FILE, "w") as f:
+                json.dump(cache, f, indent=4)
+        except Exception:
+            pass
+            
+    else:
+        # Todo falló (sin internet), cargamos desde la caché
+        trm_dia_cached = cache.get("_trm_dia")
+        trm_yesterday_cached = cache.get("_trm_yesterday")
+        trm_dia = trm_dia_cached["precio"] if trm_dia_cached is not None else trm_dia_yf
+        trm_yesterday = trm_yesterday_cached["precio"] if trm_yesterday_cached is not None else trm_yesterday_yf
     
     # Clean global tickers results
     precios_global = {k: v for k, v in precios.items() if k != trm_ticker}
