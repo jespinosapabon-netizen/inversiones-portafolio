@@ -1504,12 +1504,15 @@ efecto_divisa_total = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"]["Ef_D
 # AUTO-RECTIFICACIÓN DEL HISTORIAL PATRIMONIAL EN DISCO
 # -----------------------------------------------------------------------------
 def resolver_clase_bursatil_v5(c, t):
-    if t in ["Disponible Broker Col", "Broker EEUU"]: return "Cash Broker Desk"
-    if c in ["Acciones EEUU"]: return "Acciones EEUU"
-    if c in ["Acciones Colombia"]: return "Acciones Colombia"
-    if c in ["Commodities (Oro)"]: return "Commodities (Oro)"
-    if c in ["Fondos de Inversión"]: return "Fondos de Inversión"
-    return c
+    c_str = str(c).strip()
+    c_lower = c_str.lower()
+    if t in ["Disponible Broker Col", "Broker EEUU"] or "liquidez" in c_lower or "cash" in c_lower: 
+        return "Cash Broker Desk"
+    if c_str in ["Acciones EEUU"]: return "Acciones EEUU"
+    if c_str in ["Acciones Colombia"]: return "Acciones Colombia"
+    if c_str in ["Commodities (Oro)"]: return "Commodities (Oro)"
+    if c_str in ["Fondos de Inversión"]: return "Fondos de Inversión"
+    return c_str
 
 maestro_df["Clase_Linea"] = maestro_df.apply(lambda r: resolver_clase_bursatil_v5(r["Clase"], r["Ticker"]), axis=1)
 
@@ -1786,84 +1789,46 @@ category_meta = {
     "Propiedad Raíz": {"emoji": "🏢", "color": "#94A3B8"}
 }
 
-row1_data = df_cambio_clase.iloc[:4]
-row2_data = df_cambio_clase.iloc[4:]
-
-# Render Row 1: 4 columns
-cols_row1 = st.columns(4)
-for idx, r_clase in row1_data.reset_index(drop=True).iterrows():
-    c_name = r_clase["Clase"]
-    c_var = r_clase["Var COP"]
-    c_tot = r_clase["Total_COP"]
-    c_pct = (c_var / (c_tot - c_var) * 100) if (c_tot - c_var) > 0 else 0.0
-    
-    meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
-    
-    if c_var > 0.01:
-        indicator_arrow = "▲"
-        clase_color = "#10B981"  # Verde esmeralda
-        color_class = "delta-positive"
-    elif c_var < -0.01:
-        indicator_arrow = "▼"
-        clase_color = "#EF4444"  # Rojo carmesí
-        color_class = "delta-negative"
-    else:
-        indicator_arrow = "▪"
-        clase_color = "#9CA3AF"  # Gris neutral
-        color_class = "delta-neutral"
+# Render categories dynamically in rows of 4 columns to prevent IndexError if new classes are added
+cols_per_row = 4
+for i in range(0, len(df_cambio_clase), cols_per_row):
+    chunk = df_cambio_clase.iloc[i : i + cols_per_row].reset_index(drop=True)
+    cols = st.columns(cols_per_row)
+    for idx, r_clase in chunk.iterrows():
+        c_name = r_clase["Clase"]
+        c_var = r_clase["Var COP"]
+        c_tot = r_clase["Total_COP"]
+        c_pct = (c_var / (c_tot - c_var) * 100) if (c_tot - c_var) > 0 else 0.0
         
-    with cols_row1[idx]:
-        st.markdown(f"""
-        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 105px; padding: 12px 16px; margin-bottom: 8px;">
-            <div class="breakdown-title" style="font-size: 11px; font-weight: 800;">{meta['emoji']} {c_name.upper()}</div>
-            <div class="breakdown-value" style="font-size: 18px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
-                ${c_tot:,.0f} <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">COP</span>
-            </div>
-            <div style="font-size: 12.5px; font-weight: 800; margin-top: 5px;">
-                <span class="{color_class}" style="color: {clase_color} !important;">
-                    Var: {indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)
-                </span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# Render Row 2: 3 columns
-cols_row2 = st.columns(3)
-for idx, r_clase in row2_data.reset_index(drop=True).iterrows():
-    c_name = r_clase["Clase"]
-    c_var = r_clase["Var COP"]
-    c_tot = r_clase["Total_COP"]
-    c_pct = (c_var / (c_tot - c_var) * 100) if (c_tot - c_var) > 0 else 0.0
-    
-    meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
-    
-    if c_var > 0.01:
-        indicator_arrow = "▲"
-        clase_color = "#10B981"  # Verde esmeralda
-        color_class = "delta-positive"
-    elif c_var < -0.01:
-        indicator_arrow = "▼"
-        clase_color = "#EF4444"  # Rojo carmesí
-        color_class = "delta-negative"
-    else:
-        indicator_arrow = "▪"
-        clase_color = "#9CA3AF"  # Gris neutral
-        color_class = "delta-neutral"
+        meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
         
-    with cols_row2[idx]:
-        st.markdown(f"""
-        <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 105px; padding: 12px 16px; margin-bottom: 8px;">
-            <div class="breakdown-title" style="font-size: 11px; font-weight: 800;">{meta['emoji']} {c_name.upper()}</div>
-            <div class="breakdown-value" style="font-size: 18px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
-                ${c_tot:,.0f} <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">COP</span>
+        if c_var > 0.01:
+            indicator_arrow = "▲"
+            clase_color = "#10B981"  # Verde esmeralda
+            color_class = "delta-positive"
+        elif c_var < -0.01:
+            indicator_arrow = "▼"
+            clase_color = "#EF4444"  # Rojo carmesí
+            color_class = "delta-negative"
+        else:
+            indicator_arrow = "▪"
+            clase_color = "#9CA3AF"  # Gris neutral
+            color_class = "delta-neutral"
+            
+        with cols[idx]:
+            st.markdown(f"""
+            <div class="category-card" style="border-left: 4px solid {meta['color']}; min-height: 105px; padding: 12px 16px; margin-bottom: 8px;">
+                <div class="breakdown-title" style="font-size: 11px; font-weight: 800;">{meta['emoji']} {c_name.upper()}</div>
+                <div class="breakdown-value" style="font-size: 18px !important; font-weight: 800; color: var(--text-color); margin-top: 4px;">
+                    ${c_tot:,.0f} <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">COP</span>
+                </div>
+                <div style="font-size: 12.5px; font-weight: 800; margin-top: 5px;">
+                    <span class="{color_class}" style="color: {clase_color} !important;">
+                        Var: {indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)
+                    </span>
+                </div>
             </div>
-            <div style="font-size: 12.5px; font-weight: 800; margin-top: 5px;">
-                <span class="{color_class}" style="color: {clase_color} !important;">
-                    Var: {indicator_arrow} ${abs(c_var):,.0f} ({c_pct:+.2f}%)
-                </span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 tab_cuadro, tab_records, tab_news, tab_transactions = st.tabs([
