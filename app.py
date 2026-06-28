@@ -1539,11 +1539,32 @@ def resolver_clase_bursatil_v5(c, t):
 
 maestro_df["Clase_Linea"] = maestro_df.apply(lambda r: resolver_clase_bursatil_v5(r["Clase"], r["Ticker"]), axis=1)
 
-df_cambio_clase = maestro_df.groupby("Clase_Linea")[["Var COP", "Total_COP"]].sum().reset_index()
-df_cambio_clase.rename(columns={"Clase_Linea": "Clase"}, inplace=True)
+# Agrupar por Clase_Linea, pero para "Fondos de Inversión" mantenerlos individuales por su Ticker
+rows_cambio = []
+for name, group in maestro_df.groupby("Clase_Linea"):
+    if name == "Fondos de Inversión":
+        for idx, row in group.iterrows():
+            rows_cambio.append({
+                "Clase": row["Ticker"],
+                "Var COP": row["Var COP"],
+                "Total_COP": row["Total_COP"],
+                "Es_Fondo": True
+            })
+    else:
+        rows_cambio.append({
+            "Clase": name,
+            "Var COP": group["Var COP"].sum(),
+            "Total_COP": group["Total_COP"].sum(),
+            "Es_Fondo": False
+        })
+df_cambio_clase = pd.DataFrame(rows_cambio)
 
 orden_categorias = ["Acciones EEUU", "Acciones Colombia", "Criptomonedas", "Commodities (Oro)", "Fondos de Inversión", "Cash Broker Desk", "Propiedad Raíz"]
-df_cambio_clase["sort_cat"] = df_cambio_clase["Clase"].apply(lambda x: orden_categorias.index(x) if x in orden_categorias else 99)
+df_cambio_clase["sort_cat"] = df_cambio_clase.apply(
+    lambda r: orden_categorias.index("Fondos de Inversión") if r.get("Es_Fondo", False)
+    else (orden_categorias.index(r["Clase"]) if r["Clase"] in orden_categorias else 99),
+    axis=1
+)
 df_cambio_clase = df_cambio_clase.sort_values("sort_cat").reset_index(drop=True)
 
 hoy_datetime = pd.to_datetime(datetime.now(COL_TZ).strftime("%Y-%m-%d"))
@@ -1823,7 +1844,11 @@ for i in range(0, len(df_cambio_clase), cols_per_row):
         c_tot = r_clase["Total_COP"]
         c_pct = (c_var / (c_tot - c_var) * 100) if (c_tot - c_var) > 0 else 0.0
         
-        meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
+        is_fondo_val = bool(r_clase.get("Es_Fondo", False))
+        if is_fondo_val:
+            meta = {"emoji": "💼", "color": "#EC4899"}
+        else:
+            meta = category_meta.get(c_name, {"emoji": "📦", "color": "#6B7280"})
         
         if c_var > 0.01:
             indicator_arrow = "▲"
