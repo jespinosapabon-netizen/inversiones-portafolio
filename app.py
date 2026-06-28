@@ -1911,6 +1911,11 @@ with tab_cuadro:
                 )
             )
         )
+        fig_donut_total.update_traces(
+            textposition='inside',
+            textinfo='percent',
+            insidetextfont=dict(color='#FFFFFF', size=11, family="Inter, system-ui, sans-serif")
+        )
         st.plotly_chart(fig_donut_total, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
         
     with col_donut_der:
@@ -1930,6 +1935,11 @@ with tab_cuadro:
                     family="Inter, system-ui, sans-serif"
                 )
             )
+        )
+        fig_donut_liquido.update_traces(
+            textposition='inside',
+            textinfo='percent',
+            insidetextfont=dict(color='#FFFFFF', size=11, family="Inter, system-ui, sans-serif")
         )
         st.plotly_chart(fig_donut_liquido, use_container_width=True, theme=None, config={'displayModeBar': False, 'responsive': True})
 
