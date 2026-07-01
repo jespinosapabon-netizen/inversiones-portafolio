@@ -1133,36 +1133,77 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     trm_yesterday_yf = trm_dia_yf
     trm_success = False
     
-    # 1. Intentar obtener la TRM/Spot desde yfinance (tiempo real al minuto)
+    # 1. Intentar obtener la TRM/Spot desde yfinance (tiempo real con fast_info + histórico para ayer)
     try:
-        df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
-        if df_trm is not None and not df_trm.empty:
-            close_col_trm = pd.Series()
-            if "Close" in df_trm.columns:
-                close_col_trm = df_trm["Close"].dropna()
-            elif isinstance(df_trm.columns, pd.MultiIndex):
-                if "Close" in df_trm.columns.levels[0]:
-                    close_col_trm = df_trm.xs("Close", axis=1, level=0).dropna()
-                elif "Close" in df_trm.columns.levels[1]:
-                    close_col_trm = df_trm.xs("Close", axis=1, level=1).dropna()
+        # Intentamos obtener primero el precio spot exacto en tiempo real
+        ticker_obj = yf.Ticker(trm_ticker)
+        live_price = float(ticker_obj.fast_info['lastPrice'])
+        if live_price > 0:
+            trm_dia_yf = live_price
+            trm_success = True
             
-            if len(close_col_trm) >= 1:
-                val_last = close_col_trm.iloc[-1]
-                trm_dia_yf = float(val_last.iloc[0]) if isinstance(val_last, pd.Series) else float(val_last)
-                trm_success = True
-                if len(close_col_trm) >= 2:
-                    val_prev = close_col_trm.iloc[-2]
-                    trm_yesterday_yf = float(val_prev.iloc[0]) if isinstance(val_prev, pd.Series) else float(val_prev)
-                else:
-                    # Si no hay 2 días en yfinance, intentamos usar el cache temporal
-                    cache_temp = cargar_cache_precios()
-                    trm_yesterday_cached = cache_temp.get("_trm_yesterday")
-                    if trm_yesterday_cached is not None:
-                        trm_yesterday_yf = trm_yesterday_cached["precio"]
+            # Ahora buscamos la tasa del día anterior de forma histórica
+            df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
+            if df_trm is not None and not df_trm.empty:
+                close_col_trm = pd.Series()
+                if "Close" in df_trm.columns:
+                    close_col_trm = df_trm["Close"].dropna()
+                elif isinstance(df_trm.columns, pd.MultiIndex):
+                    if "Close" in df_trm.columns.levels[0]:
+                        close_col_trm = df_trm.xs("Close", axis=1, level=0).dropna()
+                    elif "Close" in df_trm.columns.levels[1]:
+                        close_col_trm = df_trm.xs("Close", axis=1, level=1).dropna()
+                
+                if not close_col_trm.empty:
+                    last_date_str = str(close_col_trm.index[-1]).split()[0]
+                    hoy_str = datetime.now(COL_TZ).strftime("%Y-%m-%d")
+                    if last_date_str == hoy_str:
+                        if len(close_col_trm) >= 2:
+                            val_prev = close_col_trm.iloc[-2]
+                            trm_yesterday_yf = float(val_prev.iloc[0]) if isinstance(val_prev, pd.Series) else float(val_prev)
+                        else:
+                            cache_temp = cargar_cache_precios()
+                            trm_yesterday_cached = cache_temp.get("_trm_yesterday")
+                            if trm_yesterday_cached is not None:
+                                trm_yesterday_yf = trm_yesterday_cached["precio"]
+                            else:
+                                trm_yesterday_yf = trm_dia_yf
                     else:
-                        trm_yesterday_yf = trm_dia_yf
+                        val_prev = close_col_trm.iloc[-1]
+                        trm_yesterday_yf = float(val_prev.iloc[0]) if isinstance(val_prev, pd.Series) else float(val_prev)
     except Exception:
         pass
+
+    # Fallback si fast_info falló pero tenemos datos de df_trm
+    if not trm_success:
+        try:
+            df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
+            if df_trm is not None and not df_trm.empty:
+                close_col_trm = pd.Series()
+                if "Close" in df_trm.columns:
+                    close_col_trm = df_trm["Close"].dropna()
+                elif isinstance(df_trm.columns, pd.MultiIndex):
+                    if "Close" in df_trm.columns.levels[0]:
+                        close_col_trm = df_trm.xs("Close", axis=1, level=0).dropna()
+                    elif "Close" in df_trm.columns.levels[1]:
+                        close_col_trm = df_trm.xs("Close", axis=1, level=1).dropna()
+                
+                if len(close_col_trm) >= 1:
+                    val_last = close_col_trm.iloc[-1]
+                    trm_dia_yf = float(val_last.iloc[0]) if isinstance(val_last, pd.Series) else float(val_last)
+                    trm_success = True
+                    if len(close_col_trm) >= 2:
+                        val_prev = close_col_trm.iloc[-2]
+                        trm_yesterday_yf = float(val_prev.iloc[0]) if isinstance(val_prev, pd.Series) else float(val_prev)
+                    else:
+                        cache_temp = cargar_cache_precios()
+                        trm_yesterday_cached = cache_temp.get("_trm_yesterday")
+                        if trm_yesterday_cached is not None:
+                            trm_yesterday_yf = trm_yesterday_cached["precio"]
+                        else:
+                            trm_yesterday_yf = trm_dia_yf
+        except Exception:
+            pass
 
     # 2. Si yfinance falló (común en Streamlit Cloud por bloqueos), usar ExchangeRate-API como fallback en vivo
     trm_dia_fallback = None
