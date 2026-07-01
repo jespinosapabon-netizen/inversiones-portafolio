@@ -1088,13 +1088,26 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
                 try:
                     df_t = df if len(todos_tickers) == 1 else (df[t] if t in df else None)
                     if df_t is not None and not df_t.empty:
-                        close_col = df_t["Close"].dropna()
-                        if len(close_col) >= 2:
-                            precios[t] = float(close_col.iloc[-1])
-                            variaciones[t] = ((float(close_col.iloc[-1]) - float(close_col.iloc[-2])) / float(close_col.iloc[-2])) * 100
-                        elif len(close_col) == 1:
-                            precios[t] = float(close_col.iloc[-1])
-                            variaciones[t] = 0.0
+                        close_col = pd.Series()
+                        if "Close" in df_t.columns:
+                            close_col = df_t["Close"].dropna()
+                        elif isinstance(df_t.columns, pd.MultiIndex):
+                            if "Close" in df_t.columns.levels[0]:
+                                close_col = df_t.xs("Close", axis=1, level=0).dropna()
+                            elif "Close" in df_t.columns.levels[1]:
+                                close_col = df_t.xs("Close", axis=1, level=1).dropna()
+                        
+                        if len(close_col) >= 1:
+                            val_last = close_col.iloc[-1]
+                            p_last = float(val_last.iloc[0]) if isinstance(val_last, pd.Series) else float(val_last)
+                            precios[t] = p_last
+                            
+                            if len(close_col) >= 2:
+                                val_prev = close_col.iloc[-2]
+                                p_prev = float(val_prev.iloc[0]) if isinstance(val_prev, pd.Series) else float(val_prev)
+                                variaciones[t] = ((p_last - p_prev) / p_prev) * 100
+                            else:
+                                variaciones[t] = 0.0
                 except Exception:
                     pass
     except Exception:
@@ -1124,11 +1137,30 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     try:
         df_trm = df if len(todos_tickers) == 1 else (df[trm_ticker] if trm_ticker in df else None)
         if df_trm is not None and not df_trm.empty:
-            close_col_trm = df_trm["Close"].dropna()
-            if len(close_col_trm) >= 2:
-                trm_dia_yf = float(close_col_trm.iloc[-1])
-                trm_yesterday_yf = float(close_col_trm.iloc[-2])
+            close_col_trm = pd.Series()
+            if "Close" in df_trm.columns:
+                close_col_trm = df_trm["Close"].dropna()
+            elif isinstance(df_trm.columns, pd.MultiIndex):
+                if "Close" in df_trm.columns.levels[0]:
+                    close_col_trm = df_trm.xs("Close", axis=1, level=0).dropna()
+                elif "Close" in df_trm.columns.levels[1]:
+                    close_col_trm = df_trm.xs("Close", axis=1, level=1).dropna()
+            
+            if len(close_col_trm) >= 1:
+                val_last = close_col_trm.iloc[-1]
+                trm_dia_yf = float(val_last.iloc[0]) if isinstance(val_last, pd.Series) else float(val_last)
                 trm_success = True
+                if len(close_col_trm) >= 2:
+                    val_prev = close_col_trm.iloc[-2]
+                    trm_yesterday_yf = float(val_prev.iloc[0]) if isinstance(val_prev, pd.Series) else float(val_prev)
+                else:
+                    # Si no hay 2 días en yfinance, intentamos usar el cache temporal
+                    cache_temp = cargar_cache_precios()
+                    trm_yesterday_cached = cache_temp.get("_trm_yesterday")
+                    if trm_yesterday_cached is not None:
+                        trm_yesterday_yf = trm_yesterday_cached["precio"]
+                    else:
+                        trm_yesterday_yf = trm_dia_yf
     except Exception:
         pass
 
