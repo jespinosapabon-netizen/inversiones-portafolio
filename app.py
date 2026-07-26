@@ -3438,8 +3438,12 @@ with tab_tactical:
     sharpe_antes = (ret_antes_pct - 5.0) / vol_antes
     sharpe_despues = (ret_despues_pct - 5.0) / vol_despues
     
-    var_95_antes = patrimonio_total * (vol_antes * 1.645 / 100.0)
-    var_95_despues = patrimonio_total * (vol_despues * 1.645 / 100.0)
+    # VaR 95% Paramétrico Anual exacto sobre el Portafolio Líquido (Z = 1.645)
+    var_pct_antes = max(1.0, (1.645 * vol_antes) - ret_antes_pct)
+    var_pct_despues = max(1.0, (1.645 * vol_despues) - ret_despues_pct)
+    
+    var_95_antes = patrimonio_liquido * (var_pct_antes / 100.0)
+    var_95_despues = patrimonio_liquido * (var_pct_despues / 100.0)
     
     with col_kpi1:
         st.metric("Retorno Proyectado (CAGR)", f"{ret_despues_pct:.1f}%", f"{ret_despues_pct - ret_antes_pct:+.1f}% vs Actual")
@@ -3448,7 +3452,7 @@ with tab_tactical:
     with col_kpi3:
         st.metric("Ratio de Sharpe Estimado", f"{sharpe_despues:.2f}", f"{sharpe_despues - sharpe_antes:+.2f} vs Actual")
     with col_kpi4:
-        st.metric("VaR 95% (Máx Pérdida 1 Año)", f"${var_95_despues/1e6:,.0f}M COP", f"${(var_95_despues - var_95_antes)/1e6:+.0f}M COP", delta_color="inverse")
+        st.metric("VaR 95% (Pérdida Máx 1 Año)", f"${var_95_despues/1e6:,.0f}M COP", f"{var_pct_despues:.1f}% AUM Líquido", delta_color="inverse")
         
     # 3. Matriz de Estrés Cambiario (TRM) y Monte Carlo Overlay
     st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:12px; margin-bottom:8px;'>C. MATRIZ DE ESTRÉS CAMBIARIO & MONTE CARLO PROYECTADO</p>", unsafe_allow_html=True)
@@ -3456,11 +3460,13 @@ with tab_tactical:
     col_pf_mat, col_pf_mc = st.columns([2.0, 3.0])
     
     with col_pf_mat:
-        trm_baja, trm_alta = 3600.0, 4300.0
+        # Escenarios dinámicos porcentuales respecto a la TRM spot del día (-10% Caída / Spot Mercado / +10% Subida)
+        trm_baja = trm_dia * 0.90
+        trm_alta = trm_dia * 1.10
         val_usd_sim = patrimonio_total * (usd_exp_despues / 100.0)
         
-        delta_trm_baja = trm_baja - trm_dia
-        delta_trm_alta = trm_alta - trm_dia
+        delta_trm_baja = trm_baja - trm_dia  # Negativo (-10%)
+        delta_trm_alta = trm_alta - trm_dia  # Positivo (+10%)
         
         impacto_antes_baja = (val_usd_actual / trm_dia) * delta_trm_baja
         impacto_despues_baja = (val_usd_sim / trm_dia) * delta_trm_baja
@@ -3477,17 +3483,17 @@ with tab_tactical:
                     <th style='text-align:center;'>Después (Pro-Forma)</th>
                 </tr>
                 <tr style='border-bottom:1px solid rgba(255,255,255,0.1);'>
-                    <td style='padding:8px; color:#FFFFFF;'>🔴 Caída TRM ($3.600 COP)</td>
+                    <td style='padding:8px; color:#FFFFFF;'>🔴 Caída TRM -10% (${trm_baja:,.0f} COP)</td>
                     <td style='text-align:center; color:#EF4444; font-weight:600;'>${impacto_antes_baja:,.0f} COP</td>
                     <td style='text-align:center; color:#EF4444; font-weight:800;'>${impacto_despues_baja:,.0f} COP</td>
                 </tr>
                 <tr style='border-bottom:1px solid rgba(255,255,255,0.1);'>
-                    <td style='padding:8px; color:#FFFFFF;'>🟡 TRM Mercado (${trm_dia:,.0f} COP)</td>
+                    <td style='padding:8px; color:#FFFFFF;'>🟡 TRM Mercado Spot (${trm_dia:,.0f} COP)</td>
                     <td style='text-align:center; color:#F59E0B;'>$0 COP</td>
                     <td style='text-align:center; color:#F59E0B; font-weight:800;'>$0 COP</td>
                 </tr>
                 <tr>
-                    <td style='padding:8px; color:#FFFFFF;'>🟢 Disparo TRM ($4.300 COP)</td>
+                    <td style='padding:8px; color:#FFFFFF;'>🟢 Disparo TRM +10% (${trm_alta:,.0f} COP)</td>
                     <td style='text-align:center; color:#10B981; font-weight:600;'>+${impacto_antes_alta:,.0f} COP</td>
                     <td style='text-align:center; color:#10B981; font-weight:900;'>+${impacto_despues_alta:,.0f} COP</td>
                 </tr>
