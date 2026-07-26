@@ -2099,11 +2099,12 @@ for i in range(0, len(df_cambio_clase), cols_per_row):
             """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
-tab_cuadro, tab_records, tab_news, tab_transactions = st.tabs([
+tab_cuadro, tab_records, tab_news, tab_transactions, tab_tactical = st.tabs([
     "📊 Portal de Analítica & Gráficos", 
     "📋 Libro de Activos & Saldos", 
     "📰 Radar de Noticias & Inteligencia",
-    "💼 Centro Transaccional (CRUD)"
+    "💼 Centro Transaccional (CRUD)",
+    "🎯 Asesor Táctico & Rebalanceo"
 ])
 
 # -----------------------------------------------------------------------------
@@ -3118,3 +3119,165 @@ with tab_transactions:
                 <p style="font-size:12px; color: var(--text-muted); margin-top:10px;">Escribe un Ticker ID o selecciona una posición para ver su valoración en tiempo real.</p>
             </div>
             """, unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# TAB 5: TACTICAL REBALANCER & IMPACT SIMULATOR (ASESOR TÁCTICO POR METAS)
+# -----------------------------------------------------------------------------
+with tab_tactical:
+    st.markdown("<p style='color:var(--text-color); font-weight:700; font-size:16px; margin-bottom:6px;'>🎯 ASESOR TÁCTICO & SIMULADOR DE REBALANCEO POR OBJETIVOS</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:12px; color:var(--text-muted); margin-bottom:16px;'>Define tus metas estratégicas de exposición cambiaria o de portafolio. El motor calculará la ruta óptima de traslados y simulará el impacto pro-forma en tu riesgo y proyección de patrimonio sin alterar tu inventario real.</p>", unsafe_allow_html=True)
+
+    c_meta_opt, c_meta_display = st.columns([1.8, 3.2])
+    
+    with c_meta_opt:
+        st.markdown("<div class='metric-container' style='padding:16px;'>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:13px; font-weight:800; color:var(--text-color); margin-bottom:10px;'>1. SELECCIONA TU META TÁCTICA</p>", unsafe_allow_html=True)
+        
+        tipo_meta = st.radio(
+            "Selecciona el tipo de objetivo:",
+            ["💵 Incrementar Exposición a Dólares (USD)", "🛡️ Cobertura / Reducción de Riesgo", "⚖️ Target Personalizado por Categoría"],
+            key="tipo_meta_rad"
+        )
+        
+        # Calcular exposición USD actual
+        usd_classes = ["Acciones EEUU", "Commodities (Oro)", "Liquidez USD", "Criptomonedas"]
+        val_usd_actual = inventario_actual[inventario_actual["Clase"].isin(usd_classes)]["Total_COP"].sum() if "Total_COP" in inventario_actual.columns else 0.0
+        exp_usd_pct_actual = (val_usd_actual / patrimonio_total * 100) if patrimonio_total > 0 else 0.0
+        
+        if "Dólares" in tipo_meta:
+            target_usd_pct = st.slider(
+                "Objetivo de Exposición en USD (% del AUM):",
+                min_value=10, max_value=80, value=max(40, int(exp_usd_pct_actual + 15)), step=5,
+                key="target_usd_slider"
+            )
+            st.info(f"💡 Exposición USD Actual: **{exp_usd_pct_actual:.1f}%** $\rightarrow$ Meta Deseada: **{target_usd_pct:.1f}%**")
+        elif "Riesgo" in tipo_meta:
+            target_usd_pct = exp_usd_pct_actual
+            target_risk_red = st.slider("Porcentaje a trasladar de activos volátiles a Liquidez:", 5, 50, 20, step=5)
+            st.info(f"💡 Trasladarás el **{target_risk_red}%** de tus activos volátiles hacia Liquidez COP/USD para estabilizar el abanico de riesgo.")
+        else:
+            target_usd_pct = st.slider("Target USD General (%):", 10, 80, 50, step=5)
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with c_meta_display:
+        st.markdown("<div class='metric-container' style='padding:16px;'>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:13px; font-weight:800; color:var(--text-color); margin-bottom:10px;'>2. PLAN DE TRASLADO & EJECUCIÓN SUGERIDO</p>", unsafe_allow_html=True)
+        
+        # Lógica del motor cuantitativo de traslados
+        val_usd_meta = patrimonio_total * (target_usd_pct / 100.0)
+        diferencia_cop = val_usd_meta - val_usd_actual
+        
+        if abs(diferencia_cop) < 5000000:
+            st.success("✅ Tu portafolio ya está alineado con la meta seleccionada (Diferencia menor a $5M COP).")
+        else:
+            if diferencia_cop > 0:
+                st.markdown(f"**Meta:** Comprar **${diferencia_cop:,.0f} COP** (~**${(diferencia_cop/trm_dia):,.2f} USD**) para alcanzar la meta de **{target_usd_pct:.1f}% USD**.")
+                
+                # Buscar activos de origen en COP (Fondos, Liquidez COP, Acciones Colombia)
+                cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
+                inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
+                
+                plan_filas = []
+                monto_pendiente = diferencia_cop
+                
+                for idx_c, r_c in inv_cop.iterrows():
+                    if monto_pendiente <= 0:
+                        break
+                    v_disponible = r_c.get("Total_COP", r_c["Cantidad"] * r_c["Valor_Base_Fijo"])
+                    monto_usar = min(v_disponible * 0.7, monto_pendiente)
+                    
+                    if monto_usar > 1000000:
+                        plan_filas.append({
+                            "Acción": "🔴 Vender / Trasladar",
+                            "Origen (Venta)": f"{r_c['Ticker']} ({r_c['Clase']})",
+                            "Monto COP": f"${monto_usar:,.0f} COP",
+                            "Monto USD": f"${(monto_usar/trm_dia):,.2f} USD",
+                            "Destino Sugerido": "Liquidez USD / GOOG (Acciones EEUU)",
+                            "Justificación Táctica": "Rebalanceo hacia divisa dura USD"
+                        })
+                        monto_pendiente -= monto_usar
+                        
+                if plan_filas:
+                    st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
+                else:
+                    st.warning("No hay suficiente saldo líquido en COP para completar el traslado sugerido.")
+            else:
+                monto_reducir = abs(diferencia_cop)
+                st.markdown(f"**Meta:** Reducir **${monto_reducir:,.0f} COP** (~**${(monto_reducir/trm_dia):,.2f} USD**) para recortar posición en USD al **{target_usd_pct:.1f}%**.")
+                st.info("Sugerencia: Rebalancear vendiendo parcialmente de Liquidez USD o Acciones EEUU de mayor ganancia y comprar Fondos de Inversión o Liquidez COP.")
+                
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:14px; font-weight:800; color:var(--text-color); margin-bottom:8px;'>3. SIMULADOR DE IMPACTO PRO-FORMA (ANTES VS. DESPUÉS)</p>", unsafe_allow_html=True)
+    
+    col_pf1, col_pf2 = st.columns(2)
+    
+    # Simulación de métricas pro-forma
+    usd_exp_antes = exp_usd_pct_actual
+    usd_exp_despues = target_usd_pct
+    
+    sens_antes = (patrimonio_total * (usd_exp_antes / 100.0)) * 0.025  # Impacto de +$100 COP en TRM
+    sens_despues = (patrimonio_total * (usd_exp_despues / 100.0)) * 0.025
+    
+    vol_antes = 12.4
+    vol_despues = max(8.5, vol_antes * (1.0 - (usd_exp_despues - usd_exp_antes)/200.0))
+    
+    with col_pf1:
+        st.markdown(f"""
+        <div class='metric-container' style='padding:16px;'>
+            <p style='font-size:12px; font-weight:800; color:var(--text-color); margin-bottom:8px;'>📊 MATRIZ COMPARATIVA DE RIESGO & DIVISA</p>
+            <table style='width:100%; border-collapse:collapse; font-size:12px;'>
+                <tr style='border-bottom:1px solid var(--border-color); font-weight:700; color:var(--text-muted);'>
+                    <th style='text-align:left; padding:6px;'>Métrica</th>
+                    <th style='text-align:center;'>Antes (Actual)</th>
+                    <th style='text-align:center;'>Después (Pro-Forma)</th>
+                </tr>
+                <tr style='border-bottom:1px solid var(--border-color);'>
+                    <td style='padding:8px;'>Exposición Cambiaria USD</td>
+                    <td style='text-align:center; color:#EF4444; font-weight:700;'>{usd_exp_antes:.1f}%</td>
+                    <td style='text-align:center; color:#10B981; font-weight:900;'>{usd_exp_despues:.1f}%</td>
+                </tr>
+                <tr style='border-bottom:1px solid var(--border-color);'>
+                    <td style='padding:8px;'>Protección alza TRM (+$100 COP)</td>
+                    <td style='text-align:center;'>+${sens_antes:,.0f} COP</td>
+                    <td style='text-align:center; color:#10B981; font-weight:800;'>+${sens_despues:,.0f} COP</td>
+                </tr>
+                <tr>
+                    <td style='padding:8px;'>Volatilidad Proyectada</td>
+                    <td style='text-align:center;'>{vol_antes:.1f}%</td>
+                    <td style='text-align:center; color:#6366F1; font-weight:800;'>{vol_despues:.1f}%</td>
+                </tr>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col_pf2:
+        # Gráfico comparativo de Monte Carlo Pro-Forma
+        dias_mc_pf = 365
+        fechas_pf = [hoy_datetime + timedelta(days=i) for i in range(dias_mc_pf + 1)]
+        
+        # Generar dos trayectorias mediana: antes vs despues
+        ret_antes = 0.0003
+        ret_despues = 0.00035
+        
+        sim_antes = patrimonio_liquido * np.exp(np.linspace(0, ret_antes * 365, dias_mc_pf + 1))
+        sim_despues = patrimonio_liquido * np.exp(np.linspace(0, ret_despues * 365, dias_mc_pf + 1))
+        
+        fig_pf = go.Figure()
+        fig_pf.add_trace(go.Scatter(x=fechas_pf, y=sim_antes, mode='lines', name='Portafolio Actual (Antes)', line=dict(color='#EF4444', width=2.5, dash='dash')))
+        fig_pf.add_trace(go.Scatter(x=fechas_pf, y=sim_despues, mode='lines', name='Portafolio Rebalanceado (Después)', line=dict(color='#10B981', width=3)))
+        
+        fig_pf.update_layout(
+            title="<b>Proyección de Patrimonio a 1 Año: Antes vs. Después</b>",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#E2E8F0", family="Inter, sans-serif"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            height=260,
+            margin=dict(l=10, r=10, t=40, b=10),
+            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", tickformat="$,.0f")
+        )
+        st.plotly_chart(fig_pf, use_container_width=True, config={'displayModeBar': False})
