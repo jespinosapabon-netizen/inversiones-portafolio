@@ -435,38 +435,22 @@ st.markdown(f"""
         display: none !important;
     }}
     
-    /* BARRA SUPERIOR ADHESIVA (STICKY GLASS BAR) & ANIMACIONES */
-    [data-testid="stHorizontalBlock"]:first-of-type {{
-        align-items: center !important;
-        position: sticky !important;
-        top: 0px !important;
-        z-index: 99999 !important;
-        background: var(--bg-glass) !important;
-        backdrop-filter: blur(16px) !important;
-        -webkit-backdrop-filter: blur(16px) !important;
-        padding: 10px 18px !important;
-        border-radius: 16px !important;
-        border: 1px solid var(--border-color) !important;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
-        margin-bottom: 15px !important;
-    }}
-    [data-testid="stHorizontalBlock"]:first-of-type label {{
-        margin-bottom: 0px !important;
-    }}
-    
-    @keyframes fadeInUp {{
-        from {{
-            opacity: 0;
-            transform: translateY(12px);
-        }}
-        to {{
-            opacity: 1;
-            transform: translateY(0);
-        }}
-    }}
-    
-    .metric-container, .breakdown-card, .pnl-container, div[data-testid="stTabs"] {{
+    /* ESTILOS PREMIUM PARA LA BARRA SUPERIOR & CONTROL DE PESTAÑAS */
+    .metric-container, .breakdown-card, .pnl-container {{
         animation: fadeInUp 0.4s ease-out forwards;
+    }}
+    
+    /* Garantizar que las pestañas (st.tabs) sean 100% clicables y visibles en todo momento */
+    div[data-testid="stTabs"] button[data-baseweb="tab"] {{
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        z-index: 1000 !important;
+        font-weight: 700 !important;
+        color: var(--text-color) !important;
+    }}
+    div[data-testid="stTabs"] button[aria-selected="true"] {{
+        border-bottom-color: #6366F1 !important;
+        color: #6366F1 !important;
     }}
     
     /* Configuración estructural base full-width */
