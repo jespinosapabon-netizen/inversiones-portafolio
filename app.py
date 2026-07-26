@@ -1073,8 +1073,19 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
     todos_tickers = list(set(tickers + [trm_ticker]))
     
     # Static fallbacks (last resort)
-    fallbacks_p = {"IONQ": 64.0, "GOOG": 379.0, "UNH": 388.0, "V": 275.0, "MSFT": 420.0, "GLD": 414.0, "USDCOP=X": 3950.0}
-    fallbacks_v = {"IONQ": 2.15, "GOOG": -0.45, "UNH": 1.12, "V": 0.05, "MSFT": -0.88, "GLD": -0.12, "USDCOP=X": 0.0}
+    fallbacks_p = {
+        "IONQ": 64.0, "GOOG": 379.0, "UNH": 388.0, "V": 275.0, "MSFT": 420.0, "GLD": 414.0, "USDCOP=X": 3950.0,
+        "CIBEST": 83120.0, "CIBEST.CL": 83120.0,
+        "GRUPOARGOS": 16160.0, "GRUPOARGOS.CL": 16160.0,
+        "PFGRUPOARG": 12200.0, "PFGRUPOARG.CL": 12200.0,
+        "PEI": 64500.0, "PEI.CL": 64500.0,
+        "GXTESCOL": 58400.0, "GXTESCOL.CL": 58400.0
+    }
+    fallbacks_v = {
+        "IONQ": 2.15, "GOOG": -0.45, "UNH": 1.12, "V": 0.05, "MSFT": -0.88, "GLD": -0.12, "USDCOP=X": 0.0,
+        "CIBEST": 0.0, "CIBEST.CL": 0.0, "GRUPOARGOS": 0.0, "GRUPOARGOS.CL": 0.0,
+        "PFGRUPOARG": 0.0, "PFGRUPOARG.CL": 0.0, "PEI": 0.0, "PEI.CL": 0.0, "GXTESCOL": 0.0, "GXTESCOL.CL": 0.0
+    }
     
     # Load smart cache
     cache = cargar_cache_precios()
@@ -1101,13 +1112,20 @@ def consultar_mercado_global_batch(tickers, trm_ticker="USDCOP=X"):
                             val_last = close_col.iloc[-1]
                             p_last = float(val_last.iloc[0]) if isinstance(val_last, pd.Series) else float(val_last)
                             precios[t] = p_last
+                            if t.endswith(".CL"):
+                                precios[t.replace(".CL", "")] = p_last
                             
                             if len(close_col) >= 2:
                                 val_prev = close_col.iloc[-2]
                                 p_prev = float(val_prev.iloc[0]) if isinstance(val_prev, pd.Series) else float(val_prev)
-                                variaciones[t] = ((p_last - p_prev) / p_prev) * 100
+                                var_pct = ((p_last - p_prev) / p_prev) * 100
+                                variaciones[t] = var_pct
+                                if t.endswith(".CL"):
+                                    variaciones[t.replace(".CL", "")] = var_pct
                             else:
                                 variaciones[t] = 0.0
+                                if t.endswith(".CL"):
+                                    variaciones[t.replace(".CL", "")] = 0.0
                 except Exception:
                     pass
     except Exception:
@@ -1480,10 +1498,14 @@ def cargar_radar_noticias(tickers_usd):
 inventario_actual = st.session_state['inventario_activos_core']
 
 us_active = inventario_actual[inventario_actual["Clase"].isin(["Acciones EEUU", "Commodities (Oro)"])]["Ticker"].tolist()
+bvc_active = inventario_actual[inventario_actual["Clase"].isin(["Acciones Colombia", "Inmobiliario Bursátil"])]["Ticker"].tolist()
 crypto_active = inventario_actual[inventario_actual["Clase"] == "Criptomonedas"]["Ticker"].tolist()
 
-# Ultra-fast Batch APIs call! (BVC stocks are offline/static so only US assets are batched)
-trm_dia, trm_yesterday, p_us, v_us = consultar_mercado_global_batch(us_active)
+bvc_mapped = [t if t.endswith(".CL") else f"{t}.CL" for t in bvc_active]
+global_active = list(set(us_active + bvc_mapped))
+
+# Ultra-fast Batch APIs call! (US assets, TRM USD/COP, and BVC Colombian stocks batched in single call)
+trm_dia, trm_yesterday, p_us, v_us = consultar_mercado_global_batch(global_active)
 p_cry, v_cry = consultar_mercado_cripto_batch(crypto_active)
 
 precios_maestros, precios_nativos, valores_cop_maestros, variaciones_pct_maestras, variaciones_cop_maestras = [], [], [], [], []
@@ -1538,11 +1560,12 @@ for idx, row in inventario_actual.iterrows():
         ef_divisa = cnt * p_usd * (trm_dia - trm_yesterday)
         
     elif clase in ["Acciones Colombia", "Inmobiliario Bursátil"]:
-        precio_cop = row["Valor_Base_Fijo"]
+        precio_cop = p_us.get(ticker, p_us.get(f"{ticker}.CL", row["Valor_Base_Fijo"]))
         precio_nativo = precio_cop
-        v_pct = float(row["Var_Manual"]) if "Var_Manual" in row and not pd.isna(row["Var_Manual"]) else 0.0
+        default_var = float(row["Var_Manual"]) if "Var_Manual" in row and not pd.isna(row["Var_Manual"]) else 0.0
+        v_pct = v_us.get(ticker, v_us.get(f"{ticker}.CL", default_var))
         v_cop = cnt * precio_cop
-        p_usd = precio_cop / trm_dia
+        p_usd = precio_cop / trm_dia if trm_dia > 0 else 0.0
         
         # Variación diaria en COP calculada con su precio en bolsa
         precio_cop_yesterday = precio_cop / (1 + v_pct / 100) if v_pct != -100 else precio_cop
