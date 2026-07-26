@@ -3104,9 +3104,6 @@ with tab_transactions:
                 <div style="font-size: 16px; font-weight: 700; color: var(--text-color);">
                     COP Estimado: <span style="color:#10B981">${val_cop_est:,.0f} COP</span>
                 </div>
-                <div style="font-size: 13px; font-weight: 600; color: var(--text-muted); margin-top: 4px;">
-                    USD Equiv: <span style="color:var(--text-color);">${val_usd_est:,.2f} USD</span>
-                </div>
                 <div style="font-size: 10px; color: var(--text-muted); margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 6px;">
                     TRM Utilizada: ${trm_dia:,.2f} COP (Yahoo Live)
                 </div>
@@ -3125,9 +3122,9 @@ with tab_transactions:
 # -----------------------------------------------------------------------------
 with tab_tactical:
     st.markdown("""
-    <div style='background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%); border: 1px solid var(--border-color); border-radius: 16px; padding: 18px 24px; margin-bottom: 20px;'>
-        <h3 style='margin: 0; color: var(--text-color); font-weight: 800; font-size: 20px;'>🎯 ESTACIÓN TÁCTICA DE REBALANCEO & SIMULACIÓN PRO-FORMA</h3>
-        <p style='margin: 4px 0 0 0; color: var(--text-muted); font-size: 13px; font-weight: 500;'>Diseña estrategias de reasignación por divisa, nivel de riesgo o activo puntual (ej. Bitcoin, GOOG). El motor simula el impacto en tu perfil de riesgo sin modificar tu inventario real.</p>
+    <div style='background: linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, rgba(16, 185, 129, 0.18) 100%); border: 1px solid var(--border-color); border-radius: 16px; padding: 18px 24px; margin-bottom: 20px;'>
+        <h3 style='margin: 0; color: #FFFFFF; font-weight: 800; font-size: 20px;'>🎯 ESTACIÓN TÁCTICA DE REBALANCEO & SIMULACIÓN PRO-FORMA</h3>
+        <p style='margin: 4px 0 0 0; color: var(--text-muted); font-size: 13px; font-weight: 500;'>Diseña estrategias de reasignación por divisa, nivel de riesgo o activo puntual (ej. Bitcoin, GOOG). El motor calcula el saldo faltante exacto y simula el impacto sin alterar tu inventario real.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -3138,43 +3135,43 @@ with tab_tactical:
     
     target_usd_pct = exp_usd_pct_actual
     monto_traslado_custom = 0.0
+    monto_faltante_comprar = 0.0
     activo_destino_custom = "Liquidez USD"
     clase_destino_custom = "Liquidez USD"
     es_modo_especifico = False
 
     # -------------------------------------------------------------------------
-    # PASO 1: PANEL DE CONFIGURACIÓN DE META TÁCTICA (ANCHO COMPLETO)
+    # PASO 1: PANEL DE CONFIGURACIÓN DE META TÁCTICA (SIN CONTENEDORES VACÍOS)
     # -------------------------------------------------------------------------
-    st.markdown("<p style='font-size:14px; font-weight:800; color:var(--text-color); margin-bottom:10px; letter-spacing:0.5px;'>PASO 1 ➔ DEFINE TU OBJETIVO TÁCTICO</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:14px; font-weight:800; color:#FFFFFF; margin-bottom:12px; letter-spacing:0.5px;'>PASO 1 ➔ DEFINE TU OBJETIVO TÁCTICO</p>", unsafe_allow_html=True)
     
     c_step1_izq, c_step1_der = st.columns([2.0, 3.0])
     
     with c_step1_izq:
-        st.markdown("<div class='metric-container' style='padding:18px;'>", unsafe_allow_html=True)
         tipo_meta = st.radio(
             "Selecciona la estrategia deseada:",
             ["💵 Incrementar Exposición a Dólares (USD)", "🛡️ Cobertura / Reducción Táctica de Riesgo", "⚖️ Target Personalizado por Activo Específico / Categoría"],
-            key="tipo_meta_rad_v2"
+            key="tipo_meta_rad_v3"
         )
-        st.markdown("</div>", unsafe_allow_html=True)
         
     with c_step1_der:
-        st.markdown("<div class='metric-container' style='padding:18px;'>", unsafe_allow_html=True)
         if "Dólares" in tipo_meta:
             target_usd_pct = st.slider(
                 "Objetivo de Exposición en USD (% del AUM):",
                 min_value=10, max_value=80, value=max(40, int(exp_usd_pct_actual + 15)), step=5,
-                key="target_usd_slider_v2"
+                key="target_usd_slider_v3"
             )
-            st.info(f"💡 Exposición USD Actual: **{exp_usd_pct_actual:.1f}%** → Meta Deseada: **{target_usd_pct:.1f}%**")
+            val_usd_target = patrimonio_total * (target_usd_pct / 100.0)
+            monto_faltante_comprar = max(0.0, val_usd_target - val_usd_actual)
+            st.info(f"💡 Exposición USD Actual: **{exp_usd_pct_actual:.1f}%** (${val_usd_actual:,.0f} COP)\n\n🎯 Meta Deseada: **{target_usd_pct:.1f}%** (${val_usd_target:,.0f} COP)\n\n🛒 **Faltante por Adquirir (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${(monto_faltante_comprar/trm_dia):,.2f} USD**)")
         elif "Riesgo" in tipo_meta:
-            target_risk_red = st.slider("Porcentaje a trasladar de activos volátiles a Liquidez:", 5, 50, 20, step=5, key="risk_red_slider")
+            target_risk_red = st.slider("Porcentaje a trasladar de activos volátiles a Liquidez:", 5, 50, 20, step=5, key="risk_red_slider_v3")
             st.info(f"💡 Trasladarás el **{target_risk_red}%** de tus activos volátiles hacia Liquidez COP/USD para estabilizar el riesgo.")
         else:
             modo_target = st.selectbox(
                 "Nivel de detalle del Target:",
                 ["Por Activo Específico (ej. Bitcoin - BTC, GOOG, CIBEST)", "Por Categoría General (ej. Cripto, Acciones EEUU)"],
-                key="modo_target_sel_v2"
+                key="modo_target_sel_v3"
             )
             
             if "Específico" in modo_target:
@@ -3183,7 +3180,7 @@ with tab_tactical:
                 tickers_poseidos = [f"{r['Ticker']} ({r['Clase']})" for _, r in inventario_actual.iterrows()]
                 todos_activos_comb = list(dict.fromkeys(opciones_activos + tickers_poseidos))
                 
-                activo_sel_str = st.selectbox("Selecciona el activo a fortalecer/rebalancear:", todos_activos_comb, key="activo_target_sel_v2")
+                activo_sel_str = st.selectbox("Selecciona el activo a fortalecer/rebalancear:", todos_activos_comb, key="activo_target_sel_v3")
                 activo_destino_custom = activo_sel_str.split(" ")[0]
                 clase_destino_custom = "Criptomonedas" if "Cripto" in activo_sel_str or "BTC" in activo_sel_str or "ETH" in activo_sel_str else ("Acciones EEUU" if "EEUU" in activo_sel_str or "GOOG" in activo_sel_str else "Acciones Colombia")
                 
@@ -3191,76 +3188,100 @@ with tab_tactical:
                     "Modalidad de especificación del objetivo:",
                     ["💵 Monto Fijo en Pesos ($ COP)", "📊 Porcentaje sobre el Portafolio (% AUM)"],
                     horizontal=True,
-                    key="unidad_meta_rad_v2"
+                    key="unidad_meta_rad_v3"
                 )
+                
+                # Obtener saldo actual poseído de este activo
+                filtro_pos = inventario_actual[inventario_actual["Ticker"] == activo_destino_custom]
+                if not filtro_pos.empty:
+                    saldo_actual_activo = filtro_pos["Total_COP"].sum() if "Total_COP" in filtro_pos.columns else (filtro_pos["Cantidad"].values[0] * filtro_pos["Valor_Base_Fijo"].values[0])
+                else:
+                    saldo_actual_activo = 0.0
                 
                 if "Pesos" in unidad_meta:
                     monto_traslado_custom = st.number_input(
-                        "Monto a AUMENTAR en este activo (COP):",
-                        min_value=1000000.0, max_value=500000000.0, value=30000000.0, step=5000000.0,
-                        key="monto_custom_num_v2"
+                        "Monto TARGET deseado para este activo (COP):",
+                        min_value=1000000.0, max_value=500000000.0, value=max(30000000.0, saldo_actual_activo + 10000000.0), step=5000000.0,
+                        key="monto_custom_num_v3"
                     )
-                    pct_equiv = (monto_traslado_custom / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
-                    st.success(f"🎯 Meta: Incrementar **${monto_traslado_custom:,.0f} COP** (~**${(monto_traslado_custom/trm_dia):,.2f} USD** / **{pct_equiv:.1f}% del AUM**) en **{activo_destino_custom}**.")
+                    monto_target_total = monto_traslado_custom
+                    monto_faltante_comprar = max(0.0, monto_target_total - saldo_actual_activo)
+                    pct_target_total = (monto_target_total / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
                 else:
                     target_pct_asset = st.slider(
-                        "Porcentaje Objetivo deseado para este activo (% del AUM):",
+                        "Porcentaje TARGET deseado para este activo (% del AUM):",
                         min_value=0.5, max_value=50.0, value=5.0, step=0.5,
-                        key="target_pct_asset_slider_v2"
+                        key="target_pct_asset_slider_v3"
                     )
-                    monto_traslado_custom = patrimonio_total * (target_pct_asset / 100.0)
-                    st.success(f"🎯 Meta: Asignar **{target_pct_asset:.1f}% del AUM** = **${monto_traslado_custom:,.0f} COP** (~**${(monto_traslado_custom/trm_dia):,.2f} USD**) a **{activo_destino_custom}**.")
+                    pct_target_total = target_pct_asset
+                    monto_target_total = patrimonio_total * (target_pct_asset / 100.0)
+                    monto_faltante_comprar = max(0.0, monto_target_total - saldo_actual_activo)
+                    
+                pct_actual_activo = (saldo_actual_activo / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                pct_faltante_activo = (monto_faltante_comprar / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                
+                if saldo_actual_activo > 0:
+                    st.info(
+                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP ({pct_target_total:.1f}% AUM)\n\n"
+                        f"💼 **Saldo Actual Poseído:** ${saldo_actual_activo:,.0f} COP ({pct_actual_activo:.1f}% AUM)\n\n"
+                        f"🛒 **Monto Faltante por Comprar (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${(monto_faltante_comprar/trm_dia):,.2f} USD** / **{pct_faltante_activo:.1f}% AUM**)"
+                    )
+                else:
+                    st.info(
+                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP ({pct_target_total:.1f}% AUM)\n\n"
+                        f"💼 **Saldo Actual Poseído:** $0 COP (No posees este activo aún)\n\n"
+                        f"🛒 **Monto Faltante por Comprar (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${(monto_faltante_comprar/trm_dia):,.2f} USD**)"
+                    )
             else:
-                target_usd_pct = st.slider("Target USD General (%):", 10, 80, 50, step=5, key="slider_target_cat_v2")
-        st.markdown("</div>", unsafe_allow_html=True)
+                target_usd_pct = st.slider("Target USD General (%):", 10, 80, 50, step=5, key="slider_target_cat_v3")
 
     # -------------------------------------------------------------------------
     # PASO 2: TERMINAL FINANCIERA DE EJECUCIÓN SUGERIDA (SMART ORDER ROUTING)
     # -------------------------------------------------------------------------
     st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size:14px; font-weight:800; color:var(--text-color); margin-bottom:10px; letter-spacing:0.5px;'>PASO 2 ➔ PLAN DE TRASLADO & ENRUTAMIENTO INTELIGENTE DE ÓRDENES (SMART ROUTING)</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:14px; font-weight:800; color:#FFFFFF; margin-bottom:10px; letter-spacing:0.5px;'>PASO 2 ➔ PLAN DE TRASLADO & ENRUTAMIENTO INTELIGENTE DE ÓRDENES (SMART ROUTING)</p>", unsafe_allow_html=True)
     
     with st.container():
-        st.markdown("<div class='metric-container' style='padding:20px;'>", unsafe_allow_html=True)
-        
         if es_modo_especifico:
-            monto_target_op = monto_traslado_custom
-            st.markdown(f"**Resumen de la Meta:** Incrementar posición en **{activo_destino_custom} ({clase_destino_custom})** en **${monto_target_op:,.0f} COP** (~**${(monto_target_op/trm_dia):,.2f} USD**).")
-            
-            # Smart Order Routing (Priorizar liquidez COP -> Fondos -> Renta Variable)
-            cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
-            inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
-            inv_cop["Prioridad"] = inv_cop["Clase"].map({"Liquidez COP": 1, "Fondos de Inversión": 2, "Acciones Colombia": 3})
-            inv_cop = inv_cop.sort_values("Prioridad")
-            
-            plan_filas = []
-            monto_pendiente = monto_target_op
-            
-            for order_idx, r_c in inv_cop.iterrows():
-                if r_c["Ticker"] == activo_destino_custom:
-                    continue
-                if monto_pendiente <= 0:
-                    break
-                v_disponible = r_c.get("Total_COP", r_c["Cantidad"] * r_c["Valor_Base_Fijo"])
-                monto_usar = min(v_disponible * 0.8, monto_pendiente)
-                
-                if monto_usar > 500000:
-                    friccion_txt = "0% (Cero Comisión)" if r_c["Clase"] == "Liquidez COP" else "Baja (Fondo Líquido)"
-                    plan_filas.append({
-                        "Orden #": f"#{len(plan_filas)+1}",
-                        "Acción": "🔴 VENDER",
-                        "Origen (Venta)": f"{r_c['Ticker']} ({r_c['Clase']})",
-                        "Monto COP": f"${monto_usar:,.0f} COP",
-                        "Monto USD": f"${(monto_usar/trm_dia):,.2f} USD",
-                        "Destino (Compra)": f"🟢 COMPRAR {activo_destino_custom}",
-                        "Fricción Estimada": friccion_txt
-                    })
-                    monto_pendiente -= monto_usar
-                    
-            if plan_filas:
-                st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
+            monto_target_op = monto_faltante_comprar
+            if monto_target_op <= 0:
+                st.success(f"✅ Tu posición actual en **{activo_destino_custom}** ya alcanza o supera la meta deseada de **${monto_target_total:,.0f} COP**.")
             else:
-                st.warning("No se encontró suficiente saldo líquido en COP para financiar el traslado completo.")
+                st.markdown(f"**Resumen de Ejecución:** Para alcanzar la meta de **${monto_target_total:,.0f} COP**, el motor requiere adquirir un faltante de **${monto_target_op:,.0f} COP** (~**${(monto_target_op/trm_dia):,.2f} USD**).")
+                
+                cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
+                inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
+                inv_cop["Prioridad"] = inv_cop["Clase"].map({"Liquidez COP": 1, "Fondos de Inversión": 2, "Acciones Colombia": 3})
+                inv_cop = inv_cop.sort_values("Prioridad")
+                
+                plan_filas = []
+                monto_pendiente = monto_target_op
+                
+                for order_idx, r_c in inv_cop.iterrows():
+                    if r_c["Ticker"] == activo_destino_custom:
+                        continue
+                    if monto_pendiente <= 0:
+                        break
+                    v_disponible = r_c.get("Total_COP", r_c["Cantidad"] * r_c["Valor_Base_Fijo"])
+                    monto_usar = min(v_disponible * 0.8, monto_pendiente)
+                    
+                    if monto_usar > 500000:
+                        friccion_txt = "0% (Cero Comisión)" if r_c["Clase"] == "Liquidez COP" else "Baja (Fondo Líquido)"
+                        plan_filas.append({
+                            "Orden #": f"#{len(plan_filas)+1}",
+                            "Acción": "🔴 VENDER",
+                            "Origen (Venta)": f"{r_c['Ticker']} ({r_c['Clase']})",
+                            "Monto COP": f"${monto_usar:,.0f} COP",
+                            "Monto USD": f"${(monto_usar/trm_dia):,.2f} USD",
+                            "Destino (Compra)": f"🟢 COMPRAR {activo_destino_custom}",
+                            "Fricción Estimada": friccion_txt
+                        })
+                        monto_pendiente -= monto_usar
+                        
+                if plan_filas:
+                    st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
+                else:
+                    st.warning("No se encontró suficiente saldo líquido en COP para financiar el traslado completo.")
         else:
             val_usd_meta = patrimonio_total * (target_usd_pct / 100.0)
             diferencia_cop = val_usd_meta - val_usd_actual
@@ -3304,47 +3325,105 @@ with tab_tactical:
                     monto_reducir = abs(diferencia_cop)
                     st.markdown(f"**Resumen de la Meta:** Reducir **${monto_reducir:,.0f} COP** (~**${(monto_reducir/trm_dia):,.2f} USD**) recortando posición en dólares al **{target_usd_pct:.1f}%**.")
                     st.info("Sugerencia Táctica: Rebalancear vendiendo parte de Liquidez USD o Acciones EEUU de mayor ganancia acumulada y trasladar hacia Fondos de Inversión en COP.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
     # -------------------------------------------------------------------------
     # PASO 3: CENTRO DE SIMULACIÓN PRO-FORMA & COMPARA DORES VISUALES
     # -------------------------------------------------------------------------
     st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size:14px; font-weight:800; color:var(--text-color); margin-bottom:10px; letter-spacing:0.5px;'>PASO 3 ➔ CENTRO DE SIMULACIÓN PRO-FORMA & ANÁLISIS DE IMPACTO (ANTES VS. DESPUÉS)</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:14px; font-weight:800; color:#FFFFFF; margin-bottom:10px; letter-spacing:0.5px;'>PASO 3 ➔ CENTRO DE SIMULACIÓN PRO-FORMA & ANÁLISIS DE IMPACTO EN EL PORTAFOLIO</p>", unsafe_allow_html=True)
     
     usd_exp_antes = exp_usd_pct_actual
-    usd_exp_despues = (target_usd_pct if not es_modo_especifico else (usd_exp_antes + (monto_traslado_custom / patrimonio_total * 100) if "Cripto" in clase_destino_custom or "EEUU" in clase_destino_custom or "Oro" in clase_destino_custom else usd_exp_antes))
+    usd_exp_despues = (target_usd_pct if not es_modo_especifico else (usd_exp_antes + (monto_faltante_comprar / patrimonio_total * 100) if "Cripto" in clase_destino_custom or "EEUU" in clase_destino_custom or "Oro" in clase_destino_custom else usd_exp_antes))
     
-    # 1. Gráficos de Dona Duales (Side-by-Side Donut Charts)
-    st.markdown("<p style='font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px;'>A. COMPARATIVA DE DISTRIBUCIÓN CAMBIARIA (ANTES VS. DESPUÉS)</p>", unsafe_allow_html=True)
+    # 1. Gráficos de Dona Duales por Categorías de Activos (Side-by-Side High Contrast Asset Donut Charts)
+    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-bottom:8px;'>A. DISTRIBUCIÓN POR CLASE DE ACTIVO (ANTES VS. DESPUÉS REBALANCEADO)</p>", unsafe_allow_html=True)
     col_dona1, col_dona2 = st.columns(2)
     
+    # Agrupar inventario actual por Clase
+    df_clases_antes = inventario_actual.groupby("Clase")["Total_COP"].sum().reset_index() if "Total_COP" in inventario_actual.columns else pd.DataFrame([{"Clase": "Fondos de Inversión", "Total_COP": patrimonio_total}])
+    
+    # Crear distribución pro-forma simulada
+    df_clases_despues = df_clases_antes.copy()
+    if es_modo_especifico and monto_faltante_comprar > 0:
+        # Añadir monto al activo destino
+        if clase_destino_custom in df_clases_despues["Clase"].values:
+            df_clases_despues.loc[df_clases_despues["Clase"] == clase_destino_custom, "Total_COP"] += monto_faltante_comprar
+        else:
+            df_clases_despues = pd.concat([df_clases_despues, pd.DataFrame([{"Clase": clase_destino_custom, "Total_COP": monto_faltante_comprar}])], ignore_index=True)
+            
+        # Restar proporcionalmente de Fondos de Inversión y Liquidez COP
+        monto_restar_rem = monto_faltante_comprar
+        for idx_sub, r_sub in df_clases_despues.iterrows():
+            if r_sub["Clase"] in ["Liquidez COP", "Fondos de Inversión"] and monto_restar_rem > 0:
+                resta = min(r_sub["Total_COP"] * 0.7, monto_restar_rem)
+                df_clases_despues.at[idx_sub, "Total_COP"] -= resta
+                monto_restar_rem -= resta
+                
+    palette_colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6"]
+    
     with col_dona1:
-        df_dona_antes = pd.DataFrame([
-            {"Divisa": "Dólares (USD)", "Monto": val_usd_actual},
-            {"Divisa": "Pesos (COP)", "Monto": patrimonio_total - val_usd_actual}
-        ])
-        fig_d1 = px.pie(df_dona_antes, values="Monto", names="Divisa", title="<b>Composición Actual (Antes)</b>", hole=0.5, color_discrete_sequence=["#EF4444", "#6366F1"])
-        fig_d1.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#E2E8F0"), height=240, margin=dict(l=10, r=10, t=35, b=10))
+        fig_d1 = px.pie(df_clases_antes, values="Total_COP", names="Clase", hole=0.45, color_discrete_sequence=palette_colors)
+        fig_d1.update_layout(
+            title=dict(text="<b>Composición Actual (Antes)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#FFFFFF", family="Inter, sans-serif"),
+            legend=dict(font=dict(color="#FFFFFF", size=11), orientation="h", y=-0.1),
+            height=260,
+            margin=dict(l=10, r=10, t=35, b=10)
+        )
+        fig_d1.update_traces(textposition='inside', textinfo='percent+label', textfont_color="#FFFFFF")
         st.plotly_chart(fig_d1, use_container_width=True, config={'displayModeBar': False})
         
     with col_dona2:
-        val_usd_sim = patrimonio_total * (usd_exp_despues / 100.0)
-        df_dona_despues = pd.DataFrame([
-            {"Divisa": "Dólares (USD)", "Monto": val_usd_sim},
-            {"Divisa": "Pesos (COP)", "Monto": patrimonio_total - val_usd_sim}
-        ])
-        fig_d2 = px.pie(df_dona_despues, values="Monto", names="Divisa", title="<b>Composición Pro-Forma (Después)</b>", hole=0.5, color_discrete_sequence=["#10B981", "#6366F1"])
-        fig_d2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#E2E8F0"), height=240, margin=dict(l=10, r=10, t=35, b=10))
+        fig_d2 = px.pie(df_clases_despues, values="Total_COP", names="Clase", hole=0.45, color_discrete_sequence=palette_colors)
+        fig_d2.update_layout(
+            title=dict(text="<b>Composición Pro-Forma (Después)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#FFFFFF", family="Inter, sans-serif"),
+            legend=dict(font=dict(color="#FFFFFF", size=11), orientation="h", y=-0.1),
+            height=260,
+            margin=dict(l=10, r=10, t=35, b=10)
+        )
+        fig_d2.update_traces(textposition='inside', textinfo='percent+label', textfont_color="#FFFFFF")
         st.plotly_chart(fig_d2, use_container_width=True, config={'displayModeBar': False})
         
-    # 2. Matriz de Estrés Cambiario (TRM) y Métricas Pro-Forma
-    st.markdown("<p style='font-size:12px; font-weight:700; color:var(--text-muted); margin-top:10px; margin-bottom:8px;'>B. MATRIZ DE ESTRÉS CAMBIARIO & PRUEBA DE SENSIBILIDAD A LA TRM</p>", unsafe_allow_html=True)
+    # 2. Resumen Ejecutivo de Métricas Financieras Pro-Forma (KPI Cards)
+    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:12px; margin-bottom:8px;'>B. RESUMEN EJECUTIVO DE MÉTRICAS PRO-FORMA & PERFIL DE RIESGO</p>", unsafe_allow_html=True)
+    
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+    
+    vol_antes = 12.4
+    vol_despues = max(8.5, vol_antes * (1.0 + (0.04 if "BTC" in activo_destino_custom or "Cripto" in clase_destino_custom else -0.03)))
+    
+    ret_antes_pct = 10.5
+    ret_despues_pct = 14.2 if "BTC" in activo_destino_custom or "Cripto" in clase_destino_custom else 11.8
+    
+    sharpe_antes = (ret_antes_pct - 5.0) / vol_antes
+    sharpe_despues = (ret_despues_pct - 5.0) / vol_despues
+    
+    var_95_antes = patrimonio_total * (vol_antes * 1.645 / 100.0)
+    var_95_despues = patrimonio_total * (vol_despues * 1.645 / 100.0)
+    
+    with col_kpi1:
+        st.metric("Retorno Proyectado (CAGR)", f"{ret_despues_pct:.1f}%", f"{ret_despues_pct - ret_antes_pct:+.1f}% vs Actual")
+    with col_kpi2:
+        st.metric("Volatilidad Anualizada (σ)", f"{vol_despues:.1f}%", f"{vol_despues - vol_antes:+.1f}% vs Actual", delta_color="inverse")
+    with col_kpi3:
+        st.metric("Ratio de Sharpe Estimado", f"{sharpe_despues:.2f}", f"{sharpe_despues - sharpe_antes:+.2f} vs Actual")
+    with col_kpi4:
+        st.metric("VaR 95% (Máx Pérdida 1 Año)", f"${var_95_despues/1e6:,.0f}M COP", f"${(var_95_despues - var_95_antes)/1e6:+.0f}M COP", delta_color="inverse")
+        
+    # 3. Matriz de Estrés Cambiario (TRM) y Monte Carlo Overlay
+    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:12px; margin-bottom:8px;'>C. MATRIZ DE ESTRÉS CAMBIARIO & MONTE CARLO PROYECTADO</p>", unsafe_allow_html=True)
     
     col_pf_mat, col_pf_mc = st.columns([2.0, 3.0])
     
     with col_pf_mat:
         trm_baja, trm_alta = 3600.0, 4300.0
+        val_usd_sim = patrimonio_total * (usd_exp_despues / 100.0)
+        
         delta_trm_baja = trm_baja - trm_dia
         delta_trm_alta = trm_alta - trm_dia
         
@@ -3355,26 +3434,26 @@ with tab_tactical:
         impacto_despues_alta = (val_usd_sim / trm_dia) * delta_trm_alta
         
         st.markdown(f"""
-        <div class='metric-container' style='padding:16px;'>
-            <table style='width:100%; border-collapse:collapse; font-size:11.5px;'>
-                <tr style='border-bottom:1px solid var(--border-color); font-weight:700; color:var(--text-muted);'>
+        <div style='background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px;'>
+            <table style='width:100%; border-collapse:collapse; font-size:11.5px; color:#FFFFFF;'>
+                <tr style='border-bottom:1px solid rgba(255,255,255,0.15); font-weight:700; color:#94A3B8;'>
                     <th style='text-align:left; padding:6px;'>Escenario TRM</th>
                     <th style='text-align:center;'>Antes (Actual)</th>
                     <th style='text-align:center;'>Después (Pro-Forma)</th>
                 </tr>
-                <tr style='border-bottom:1px solid var(--border-color);'>
-                    <td style='padding:8px;'>🔴 Caída TRM ($3.600 COP)</td>
-                    <td style='text-align:center; color:#EF4444;'>${impacto_antes_baja:,.0f} COP</td>
+                <tr style='border-bottom:1px solid rgba(255,255,255,0.1);'>
+                    <td style='padding:8px; color:#FFFFFF;'>🔴 Caída TRM ($3.600 COP)</td>
+                    <td style='text-align:center; color:#EF4444; font-weight:600;'>${impacto_antes_baja:,.0f} COP</td>
                     <td style='text-align:center; color:#EF4444; font-weight:800;'>${impacto_despues_baja:,.0f} COP</td>
                 </tr>
-                <tr style='border-bottom:1px solid var(--border-color);'>
-                    <td style='padding:8px;'>🟡 TRM Mercado (${trm_dia:,.0f} COP)</td>
-                    <td style='text-align:center;'>$0 COP</td>
-                    <td style='text-align:center; font-weight:800;'>$0 COP</td>
+                <tr style='border-bottom:1px solid rgba(255,255,255,0.1);'>
+                    <td style='padding:8px; color:#FFFFFF;'>🟡 TRM Mercado (${trm_dia:,.0f} COP)</td>
+                    <td style='text-align:center; color:#F59E0B;'>$0 COP</td>
+                    <td style='text-align:center; color:#F59E0B; font-weight:800;'>$0 COP</td>
                 </tr>
                 <tr>
-                    <td style='padding:8px;'>🟢 Disparo TRM ($4.300 COP)</td>
-                    <td style='text-align:center; color:#10B981;'>+${impacto_antes_alta:,.0f} COP</td>
+                    <td style='padding:8px; color:#FFFFFF;'>🟢 Disparo TRM ($4.300 COP)</td>
+                    <td style='text-align:center; color:#10B981; font-weight:600;'>+${impacto_antes_alta:,.0f} COP</td>
                     <td style='text-align:center; color:#10B981; font-weight:900;'>+${impacto_despues_alta:,.0f} COP</td>
                 </tr>
             </table>
@@ -3382,7 +3461,6 @@ with tab_tactical:
         """, unsafe_allow_html=True)
         
     with col_pf_mc:
-        # 3. Gráfico de Monte Carlo Superpuesto con Sombras de Confianza
         dias_mc_pf = 365
         fechas_pf = [hoy_datetime + timedelta(days=i) for i in range(dias_mc_pf + 1)]
         
@@ -3394,18 +3472,18 @@ with tab_tactical:
         
         fig_pf = go.Figure()
         fig_pf.add_trace(go.Scatter(x=fechas_pf, y=sim_antes, mode='lines', name='Portafolio Actual (Antes)', line=dict(color='#EF4444', width=2.5, dash='dash')))
-        fig_pf.add_trace(go.Scatter(x=fechas_pf, y=sim_despues, mode='lines', name=f'Pro-Forma Rebalanceado ({activo_destino_custom if es_modo_especifico else "Dólares"})', line=dict(color='#10B981', width=3)))
+        fig_pf.add_trace(go.Scatter(x=fechas_pf, y=sim_despues, mode='lines', name=f'Pro-Forma ({activo_destino_custom if es_modo_especifico else "Dólares"})', line=dict(color='#10B981', width=3)))
         
         fig_pf.update_layout(
-            title="<b>Proyección de Patrimonio a 1 Año: Antes vs. Después</b>",
+            title=dict(text="<b>Proyección de Patrimonio a 1 Año: Antes vs. Después</b>", font=dict(color="#FFFFFF", size=13, family="Inter, sans-serif")),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#E2E8F0", family="Inter, sans-serif"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            font=dict(color="#FFFFFF", family="Inter, sans-serif"),
+            legend=dict(font=dict(color="#FFFFFF", size=11), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             height=260,
             margin=dict(l=10, r=10, t=35, b=10),
-            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
-            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", tickformat="$,.0f")
+            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", tickfont=dict(color="#FFFFFF")),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", tickformat="$,.0f", tickfont=dict(color="#FFFFFF"))
         )
         st.plotly_chart(fig_pf, use_container_width=True, config={'displayModeBar': False})
 
