@@ -3125,24 +3125,30 @@ with tab_transactions:
 # -----------------------------------------------------------------------------
 with tab_tactical:
     st.markdown("<p style='color:var(--text-color); font-weight:700; font-size:16px; margin-bottom:6px;'>🎯 ASESOR TÁCTICO & SIMULADOR DE REBALANCEO POR OBJETIVOS</p>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size:12px; color:var(--text-muted); margin-bottom:16px;'>Define tus metas estratégicas de exposición cambiaria o de portafolio. El motor calculará la ruta óptima de traslados y simulará el impacto pro-forma en tu riesgo y proyección de patrimonio sin alterar tu inventario real.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:12px; color:var(--text-muted); margin-bottom:16px;'>Define tus metas estratégicas por divisa, nivel de riesgo o activo específico (ej. Bitcoin, GOOG). El motor calculará la ruta óptima de traslados y simulará el impacto pro-forma en tu riesgo y proyección de patrimonio sin alterar tu inventario real.</p>", unsafe_allow_html=True)
 
     c_meta_opt, c_meta_display = st.columns([1.8, 3.2])
     
+    # Calcular exposición USD actual
+    usd_classes = ["Acciones EEUU", "Commodities (Oro)", "Liquidez USD", "Criptomonedas"]
+    val_usd_actual = inventario_actual[inventario_actual["Clase"].isin(usd_classes)]["Total_COP"].sum() if "Total_COP" in inventario_actual.columns else 0.0
+    exp_usd_pct_actual = (val_usd_actual / patrimonio_total * 100) if patrimonio_total > 0 else 0.0
+    
+    target_usd_pct = exp_usd_pct_actual
+    monto_traslado_custom = 0.0
+    activo_destino_custom = "Liquidez USD"
+    clase_destino_custom = "Liquidez USD"
+    es_modo_especifico = False
+
     with c_meta_opt:
         st.markdown("<div class='metric-container' style='padding:16px;'>", unsafe_allow_html=True)
         st.markdown("<p style='font-size:13px; font-weight:800; color:var(--text-color); margin-bottom:10px;'>1. SELECCIONA TU META TÁCTICA</p>", unsafe_allow_html=True)
         
         tipo_meta = st.radio(
             "Selecciona el tipo de objetivo:",
-            ["💵 Incrementar Exposición a Dólares (USD)", "🛡️ Cobertura / Reducción de Riesgo", "⚖️ Target Personalizado por Categoría"],
+            ["💵 Incrementar Exposición a Dólares (USD)", "🛡️ Cobertura / Reducción de Riesgo", "⚖️ Target Personalizado por Activo / Categoría"],
             key="tipo_meta_rad"
         )
-        
-        # Calcular exposición USD actual
-        usd_classes = ["Acciones EEUU", "Commodities (Oro)", "Liquidez USD", "Criptomonedas"]
-        val_usd_actual = inventario_actual[inventario_actual["Clase"].isin(usd_classes)]["Total_COP"].sum() if "Total_COP" in inventario_actual.columns else 0.0
-        exp_usd_pct_actual = (val_usd_actual / patrimonio_total * 100) if patrimonio_total > 0 else 0.0
         
         if "Dólares" in tipo_meta:
             target_usd_pct = st.slider(
@@ -3150,13 +3156,51 @@ with tab_tactical:
                 min_value=10, max_value=80, value=max(40, int(exp_usd_pct_actual + 15)), step=5,
                 key="target_usd_slider"
             )
-            st.info(f"💡 Exposición USD Actual: **{exp_usd_pct_actual:.1f}%** $\rightarrow$ Meta Deseada: **{target_usd_pct:.1f}%**")
+            st.info(f"💡 Exposición USD Actual: **{exp_usd_pct_actual:.1f}%** → Meta Deseada: **{target_usd_pct:.1f}%**")
         elif "Riesgo" in tipo_meta:
-            target_usd_pct = exp_usd_pct_actual
             target_risk_red = st.slider("Porcentaje a trasladar de activos volátiles a Liquidez:", 5, 50, 20, step=5)
             st.info(f"💡 Trasladarás el **{target_risk_red}%** de tus activos volátiles hacia Liquidez COP/USD para estabilizar el abanico de riesgo.")
         else:
-            target_usd_pct = st.slider("Target USD General (%):", 10, 80, 50, step=5)
+            modo_target = st.selectbox(
+                "Nivel de detalle del Target:",
+                ["Por Activo Específico (ej. Bitcoin - BTC, GOOG, CIBEST)", "Por Categoría General (ej. Cripto, Acciones EEUU)"],
+                key="modo_target_sel"
+            )
+            
+            if "Específico" in modo_target:
+                es_modo_especifico = True
+                opciones_activos = ["BTC (Bitcoin - Criptomonedas)", "ETH (Ethereum - Criptomonedas)", "GOOG (Alphabet - Acciones EEUU)", "CIBEST (Bancolombia - Acciones Col)", "GLD (Oro - Commodities)"]
+                
+                # Agregar los tickers que el usuario ya posee en su inventario
+                tickers_poseidos = [f"{r['Ticker']} ({r['Clase']})" for _, r in inventario_actual.iterrows()]
+                todos_activos_comb = list(dict.fromkeys(opciones_activos + tickers_poseidos))
+                
+                activo_sel_str = st.selectbox("Selecciona el activo a fortalecer/rebalancear:", todos_activos_comb, key="activo_target_sel")
+                activo_destino_custom = activo_sel_str.split(" ")[0]
+                unidad_meta = st.radio(
+                    "Modalidad de especificación del objetivo:",
+                    ["💵 Monto Fijo en Pesos ($ COP)", "📊 Porcentaje sobre el Portafolio (% AUM)"],
+                    key="unidad_meta_rad"
+                )
+                
+                if "Pesos" in unidad_meta:
+                    monto_traslado_custom = st.number_input(
+                        "Monto a AUMENTAR en este activo (COP):",
+                        min_value=1000000.0, max_value=500000000.0, value=30000000.0, step=5000000.0,
+                        key="monto_custom_num"
+                    )
+                    pct_equiv = (monto_traslado_custom / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                    st.success(f"🎯 Meta: Incrementar **${monto_traslado_custom:,.0f} COP** (~**${(monto_traslado_custom/trm_dia):,.2f} USD** / **{pct_equiv:.1f}% del AUM**) en **{activo_destino_custom}**.")
+                else:
+                    target_pct_asset = st.slider(
+                        "Porcentaje Objetivo deseado para este activo (% del AUM):",
+                        min_value=0.5, max_value=50.0, value=5.0, step=0.5,
+                        key="target_pct_asset_slider"
+                    )
+                    monto_traslado_custom = patrimonio_total * (target_pct_asset / 100.0)
+                    st.success(f"🎯 Meta: Asignar **{target_pct_asset:.1f}% del AUM** = **${monto_traslado_custom:,.0f} COP** (~**${(monto_traslado_custom/trm_dia):,.2f} USD**) a **{activo_destino_custom}**.")
+            else:
+                target_usd_pct = st.slider("Target USD General (%):", 10, 80, 50, step=5, key="slider_target_cat")
             
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -3164,48 +3208,81 @@ with tab_tactical:
         st.markdown("<div class='metric-container' style='padding:16px;'>", unsafe_allow_html=True)
         st.markdown("<p style='font-size:13px; font-weight:800; color:var(--text-color); margin-bottom:10px;'>2. PLAN DE TRASLADO & EJECUCIÓN SUGERIDO</p>", unsafe_allow_html=True)
         
-        # Lógica del motor cuantitativo de traslados
-        val_usd_meta = patrimonio_total * (target_usd_pct / 100.0)
-        diferencia_cop = val_usd_meta - val_usd_actual
-        
-        if abs(diferencia_cop) < 5000000:
-            st.success("✅ Tu portafolio ya está alineado con la meta seleccionada (Diferencia menor a $5M COP).")
-        else:
-            if diferencia_cop > 0:
-                st.markdown(f"**Meta:** Comprar **${diferencia_cop:,.0f} COP** (~**${(diferencia_cop/trm_dia):,.2f} USD**) para alcanzar la meta de **{target_usd_pct:.1f}% USD**.")
+        if es_modo_especifico:
+            st.markdown(f"**Meta Específica:** Incrementar posición en **{activo_destino_custom} ({clase_destino_custom})** en **${monto_traslado_custom:,.0f} COP** (~**${(monto_traslado_custom/trm_dia):,.2f} USD**).")
+            
+            # Buscar fuentes de origen en COP/Fondos para financiar la compra
+            cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
+            inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
+            
+            plan_filas = []
+            monto_pendiente = monto_traslado_custom
+            
+            for idx_c, r_c in inv_cop.iterrows():
+                if r_c["Ticker"] == activo_destino_custom:
+                    continue
+                if monto_pendiente <= 0:
+                    break
+                v_disponible = r_c.get("Total_COP", r_c["Cantidad"] * r_c["Valor_Base_Fijo"])
+                monto_usar = min(v_disponible * 0.7, monto_pendiente)
                 
-                # Buscar activos de origen en COP (Fondos, Liquidez COP, Acciones Colombia)
-                cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
-                inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
-                
-                plan_filas = []
-                monto_pendiente = diferencia_cop
-                
-                for idx_c, r_c in inv_cop.iterrows():
-                    if monto_pendiente <= 0:
-                        break
-                    v_disponible = r_c.get("Total_COP", r_c["Cantidad"] * r_c["Valor_Base_Fijo"])
-                    monto_usar = min(v_disponible * 0.7, monto_pendiente)
+                if monto_usar > 500000:
+                    plan_filas.append({
+                        "Acción": "🔴 Vender / Trasladar",
+                        "Origen (Venta)": f"{r_c['Ticker']} ({r_c['Clase']})",
+                        "Monto COP": f"${monto_usar:,.0f} COP",
+                        "Monto USD": f"${(monto_usar/trm_dia):,.2f} USD",
+                        "Destino Sugerido": f"🟢 Comprar {activo_destino_custom} ({clase_destino_custom})",
+                        "Justificación Táctica": f"Reubicación hacia {activo_destino_custom}"
+                    })
+                    monto_pendiente -= monto_usar
                     
-                    if monto_usar > 1000000:
-                        plan_filas.append({
-                            "Acción": "🔴 Vender / Trasladar",
-                            "Origen (Venta)": f"{r_c['Ticker']} ({r_c['Clase']})",
-                            "Monto COP": f"${monto_usar:,.0f} COP",
-                            "Monto USD": f"${(monto_usar/trm_dia):,.2f} USD",
-                            "Destino Sugerido": "Liquidez USD / GOOG (Acciones EEUU)",
-                            "Justificación Táctica": "Rebalanceo hacia divisa dura USD"
-                        })
-                        monto_pendiente -= monto_usar
-                        
-                if plan_filas:
-                    st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
-                else:
-                    st.warning("No hay suficiente saldo líquido en COP para completar el traslado sugerido.")
+            if plan_filas:
+                st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
             else:
-                monto_reducir = abs(diferencia_cop)
-                st.markdown(f"**Meta:** Reducir **${monto_reducir:,.0f} COP** (~**${(monto_reducir/trm_dia):,.2f} USD**) para recortar posición en USD al **{target_usd_pct:.1f}%**.")
-                st.info("Sugerencia: Rebalancear vendiendo parcialmente de Liquidez USD o Acciones EEUU de mayor ganancia y comprar Fondos de Inversión o Liquidez COP.")
+                st.warning("No hay suficiente saldo disponible en fondos/liquidez para financiar la compra sugerida.")
+        else:
+            # Lógica del motor cuantitativo de traslados por USD %
+            val_usd_meta = patrimonio_total * (target_usd_pct / 100.0)
+            diferencia_cop = val_usd_meta - val_usd_actual
+            
+            if abs(diferencia_cop) < 5000000:
+                st.success("✅ Tu portafolio ya está alineado con la meta seleccionada (Diferencia menor a $5M COP).")
+            else:
+                if diferencia_cop > 0:
+                    st.markdown(f"**Meta:** Comprar **${diferencia_cop:,.0f} COP** (~**${(diferencia_cop/trm_dia):,.2f} USD**) para alcanzar la meta de **{target_usd_pct:.1f}% USD**.")
+                    
+                    cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
+                    inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
+                    
+                    plan_filas = []
+                    monto_pendiente = diferencia_cop
+                    
+                    for idx_c, r_c in inv_cop.iterrows():
+                        if monto_pendiente <= 0:
+                            break
+                        v_disponible = r_c.get("Total_COP", r_c["Cantidad"] * r_c["Valor_Base_Fijo"])
+                        monto_usar = min(v_disponible * 0.7, monto_pendiente)
+                        
+                        if monto_usar > 1000000:
+                            plan_filas.append({
+                                "Acción": "🔴 Vender / Trasladar",
+                                "Origen (Venta)": f"{r_c['Ticker']} ({r_c['Clase']})",
+                                "Monto COP": f"${monto_usar:,.0f} COP",
+                                "Monto USD": f"${(monto_usar/trm_dia):,.2f} USD",
+                                "Destino Sugerido": "🟢 Liquidez USD / Acciones EEUU",
+                                "Justificación Táctica": "Rebalanceo hacia divisa dura USD"
+                            })
+                            monto_pendiente -= monto_usar
+                            
+                    if plan_filas:
+                        st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
+                    else:
+                        st.warning("No hay suficiente saldo líquido en COP para completar el traslado sugerido.")
+                else:
+                    monto_reducir = abs(diferencia_cop)
+                    st.markdown(f"**Meta:** Reducir **${monto_reducir:,.0f} COP** (~**${(monto_reducir/trm_dia):,.2f} USD**) para recortar posición en USD al **{target_usd_pct:.1f}%**.")
+                    st.info("Sugerencia: Rebalancear vendiendo parcialmente de Liquidez USD o Acciones EEUU de mayor ganancia y comprar Fondos de Inversión o Liquidez COP.")
                 
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -3216,13 +3293,13 @@ with tab_tactical:
     
     # Simulación de métricas pro-forma
     usd_exp_antes = exp_usd_pct_actual
-    usd_exp_despues = target_usd_pct
+    usd_exp_despues = (target_usd_pct if not es_modo_especifico else (usd_exp_antes + (monto_traslado_custom / patrimonio_total * 100) if "Cripto" in clase_destino_custom or "EEUU" in clase_destino_custom or "Oro" in clase_destino_custom else usd_exp_antes))
     
     sens_antes = (patrimonio_total * (usd_exp_antes / 100.0)) * 0.025  # Impacto de +$100 COP en TRM
     sens_despues = (patrimonio_total * (usd_exp_despues / 100.0)) * 0.025
     
     vol_antes = 12.4
-    vol_despues = max(8.5, vol_antes * (1.0 - (usd_exp_despues - usd_exp_antes)/200.0))
+    vol_despues = max(8.5, vol_antes * (1.0 + (0.05 if "BTC" in activo_destino_custom or "Cripto" in clase_destino_custom else -0.05)))
     
     with col_pf1:
         st.markdown(f"""
@@ -3260,7 +3337,7 @@ with tab_tactical:
         
         # Generar dos trayectorias mediana: antes vs despues
         ret_antes = 0.0003
-        ret_despues = 0.00035
+        ret_despues = 0.00045 if "BTC" in activo_destino_custom or "Cripto" in clase_destino_custom else 0.00035
         
         sim_antes = patrimonio_liquido * np.exp(np.linspace(0, ret_antes * 365, dias_mc_pf + 1))
         sim_despues = patrimonio_liquido * np.exp(np.linspace(0, ret_despues * 365, dias_mc_pf + 1))
@@ -3270,7 +3347,7 @@ with tab_tactical:
         fig_pf.add_trace(go.Scatter(x=fechas_pf, y=sim_despues, mode='lines', name='Portafolio Rebalanceado (Después)', line=dict(color='#10B981', width=3)))
         
         fig_pf.update_layout(
-            title="<b>Proyección de Patrimonio a 1 Año: Antes vs. Después</b>",
+            title=f"<b>Proyección a 1 Año: Antes vs. Después de Rebalancear {activo_destino_custom}</b>",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#E2E8F0", family="Inter, sans-serif"),
