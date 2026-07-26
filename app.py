@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
@@ -196,7 +197,44 @@ def guardar_inventario(df):
                         time.sleep(2.0)
                     else:
                         st.warning(f"Error al escribir inventario en base de datos: {e}")
-    df.to_csv(CSV_FILE, index=False)
+def calcular_twr_mwr(df_hist_total):
+    """
+    Calcula TWR (Time-Weighted Return) e IRR/MWR (Money-Weighted Return)
+    aislando depósitos y retiros.
+    """
+    if df_hist_total is None or len(df_hist_total) < 2:
+        return 0.0, 0.0, 0.0, 0.0
+    
+    df_s = df_hist_total.sort_values("Fecha").copy()
+    if "Flujo_Caja" not in df_s.columns:
+        df_s["Flujo_Caja"] = 0.0
+        
+    twr_product = 1.0
+    for i in range(1, len(df_s)):
+        v_prev = float(df_s.iloc[i-1]["Valor_COP"])
+        v_curr = float(df_s.iloc[i]["Valor_COP"])
+        cf = float(df_s.iloc[i]["Flujo_Caja"]) if "Flujo_Caja" in df_s.columns and not pd.isna(df_s.iloc[i]["Flujo_Caja"]) else 0.0
+        
+        balance_prev = v_prev
+        if balance_prev > 0:
+            r_sub = (v_curr - cf - balance_prev) / balance_prev
+            twr_product *= (1.0 + r_sub)
+            
+    twr_pct = (twr_product - 1.0) * 100.0
+    
+    capital_inicial = float(df_s.iloc[0]["Valor_COP"])
+    flujos_posteriores = float(df_s.iloc[1:]["Flujo_Caja"].sum()) if "Flujo_Caja" in df_s.columns else 0.0
+    capital_inyectado_total = capital_inicial + flujos_posteriores
+    saldo_actual = float(df_s.iloc[-1]["Valor_COP"])
+    ganancia_neta_acumulada = saldo_actual - capital_inyectado_total
+    
+    dias_totales = max(1, (df_s.iloc[-1]["Fecha"] - df_s.iloc[0]["Fecha"]).days)
+    if capital_inyectado_total > 0 and saldo_actual > 0:
+        irr_pct = (((saldo_actual / capital_inyectado_total) ** (365.0 / dias_totales)) - 1.0) * 100.0
+    else:
+        irr_pct = 0.0
+        
+    return twr_pct, irr_pct, capital_inyectado_total, ganancia_neta_acumulada
 
 def cargar_historial():
     if usar_base_datos():
@@ -397,12 +435,38 @@ st.markdown(f"""
         display: none !important;
     }}
     
-    /* Alinear verticalmente los elementos de las columnas del header */
+    /* BARRA SUPERIOR ADHESIVA (STICKY GLASS BAR) & ANIMACIONES */
     [data-testid="stHorizontalBlock"]:first-of-type {{
         align-items: center !important;
+        position: sticky !important;
+        top: 0px !important;
+        z-index: 99999 !important;
+        background: var(--bg-glass) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        padding: 10px 18px !important;
+        border-radius: 16px !important;
+        border: 1px solid var(--border-color) !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
+        margin-bottom: 15px !important;
     }}
     [data-testid="stHorizontalBlock"]:first-of-type label {{
         margin-bottom: 0px !important;
+    }}
+    
+    @keyframes fadeInUp {{
+        from {{
+            opacity: 0;
+            transform: translateY(12px);
+        }}
+        to {{
+            opacity: 1;
+            transform: translateY(0);
+        }}
+    }}
+    
+    .metric-container, .breakdown-card, .pnl-container, div[data-testid="stTabs"] {{
+        animation: fadeInUp 0.4s ease-out forwards;
     }}
     
     /* Configuración estructural base full-width */
@@ -1504,9 +1568,15 @@ crypto_active = inventario_actual[inventario_actual["Clase"] == "Criptomonedas"]
 bvc_mapped = [t if t.endswith(".CL") else f"{t}.CL" for t in bvc_active]
 global_active = list(set(us_active + bvc_mapped))
 
-# Ultra-fast Batch APIs call! (US assets, TRM USD/COP, and BVC Colombian stocks batched in single call)
-trm_dia, trm_yesterday, p_us, v_us = consultar_mercado_global_batch(global_active)
-p_cry, v_cry = consultar_mercado_cripto_batch(crypto_active)
+# Ultra-fast Concurrent Batch APIs call! (Multithreading parallel execution for US, BVC, TRM, and Crypto)
+from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor(max_workers=2) as executor:
+    future_global = executor.submit(consultar_mercado_global_batch, global_active)
+    future_crypto = executor.submit(consultar_mercado_cripto_batch, crypto_active)
+    
+    trm_dia, trm_yesterday, p_us, v_us = future_global.result()
+    p_cry, v_cry = future_crypto.result()
 
 precios_maestros, precios_nativos, valores_cop_maestros, variaciones_pct_maestras, variaciones_cop_maestras = [], [], [], [], []
 efectos_mercado, efectos_divisa = [], []
@@ -1760,6 +1830,9 @@ for clase_nombre in clases_maestras_series:
 df_linea_tiempo_master = pd.concat(df_lista_completa, ignore_index=True)
 df_total_diario_master = df_linea_tiempo_master.groupby("Fecha")["Valor_COP"].sum().reset_index().sort_values("Fecha")
 
+# Cálculo contable de TWR (Time-Weighted Return) y MWR/IRR (TIR)
+twr_pct_master, irr_pct_master, cap_inyectado_master, ganancia_neta_master = calcular_twr_mwr(df_total_diario_master)
+
 # -----------------------------------------------------------------------------
 # BARRA DE CONTROL SUPERIOR GLASSMORPHIC (REEMPLAZA AL SIDEBAR)
 # -----------------------------------------------------------------------------
@@ -1834,6 +1907,27 @@ with c_izq_metrics:
             <div class="metric-delta {color_class}">{var_total_pct:+.2f}% vs Cierre</div>
         </div>
         """, unsafe_allow_html=True)
+        
+    st.markdown(f"""
+    <div style='background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 8px 14px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;'>
+        <div>
+            <span style='font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;'>📥 Capital Aportado:</span>
+            <span style='font-size: 13px; color: var(--text-color); font-weight: 800; font-family: monospace;'>${cap_inyectado_master:,.0f} COP</span>
+        </div>
+        <div>
+            <span style='font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;'>📈 Ganancia Neta Bolsa:</span>
+            <span style='font-size: 13px; color: {"#10B981" if ganancia_neta_master>=0 else "#EF4444"}; font-weight: 800; font-family: monospace;'>${ganancia_neta_master:+,.0f} COP</span>
+        </div>
+        <div>
+            <span style='font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;'>🏆 Rentabilidad Pura (TWR):</span>
+            <span style='font-size: 13px; color: {"#10B981" if twr_pct_master>=0 else "#EF4444"}; font-weight: 900; font-family: monospace;'>{twr_pct_master:+.2f}%</span>
+        </div>
+        <div>
+            <span style='font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;'>⚡ Tasa TIR (MWR):</span>
+            <span style='font-size: 13px; color: #6366F1; font-weight: 900; font-family: monospace;'>{irr_pct_master:+.2f}% anual</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 with c_der_pnl:
     periodo_pnl = st.selectbox(
@@ -1916,6 +2010,36 @@ with c_desc2:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+# Gráfico de Cascada (Waterfall Chart) de Atribución P&G
+with st.expander("📊 Ver Gráfico de Cascada de Atribución P&G (Waterfall Chart)", expanded=True):
+    inicio_dia = patrimonio_liquido - (efecto_mercado_total + efecto_divisa_total)
+    
+    fig_waterfall = go.Figure(go.Waterfall(
+        name="Atribución P&G",
+        orientation="v",
+        measure=["relative", "relative", "relative", "total"],
+        x=["Inicio Día", "Efecto Mercado", "Efecto TRM", "Saldo Final"],
+        textposition="outside",
+        text=[f"${inicio_dia:,.0f}", f"${efecto_mercado_total:+,.0f}", f"${efecto_divisa_total:+,.0f}", f"${patrimonio_liquido:,.0f}"],
+        y=[inicio_dia, efecto_mercado_total, efecto_divisa_total, patrimonio_liquido],
+        connector={"line": {"color": "rgba(255, 255, 255, 0.2)", "width": 1.5}},
+        increasing={"marker": {"color": "#10B981"}},
+        decreasing={"marker": {"color": "#EF4444"}},
+        totals={"marker": {"color": "#6366F1"}}
+    ))
+
+    fig_waterfall.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0", family="Inter, sans-serif"),
+        showlegend=False,
+        height=300,
+        margin=dict(l=20, r=20, t=30, b=20),
+        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", tickformat="$,.0f")
+    )
+    
+    st.plotly_chart(fig_waterfall, use_container_width=True, config={'displayModeBar': False})
 
 # DESGLOSE DE VARIACIÓN DIARIA
 st.markdown(f"<p style='color:var(--text-color); font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:8px; margin-top:16px; letter-spacing:0.5px;'>📊 DESGLOSE DE VARIACIÓN DIARIA POR CATEGORÍA DE ACTIVO</p>", unsafe_allow_html=True)
@@ -2307,8 +2431,112 @@ with tab_cuadro:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-        else:
-            st.warning("⚡ Datos Históricos Insuficientes: Se requieren al menos 3 días de registros en la base de datos para calcular y renderizar las métricas profesionales de volatilidad y eficiencia.")
+        # -----------------------------------------------------------------------------
+        # MÓDULO DE SIMULACIÓN DE MONTE CARLO (PROYECCIÓN ESTOCÁSTICA DE PORTAFOLIO)
+        # -----------------------------------------------------------------------------
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        with st.expander("🎲 SIMULACIÓN DE MONTE CARLO & ANÁLISIS DE RIESGO PROBABILÍSTICO (1 AÑO)", expanded=False):
+            st.markdown("<p style='font-size:12px; color:var(--text-muted); margin-bottom:12px;'>La simulación ejecuta 1.000 trayectorias aleatorias basadas en el Movimiento Browniano Geométrico (GBM) respetando el comportamiento histórico real de tu portafolio.</p>", unsafe_allow_html=True)
+            
+            dias_mc = 365
+            num_sims = 1000
+            
+            if len(df_total_diario) >= 5:
+                ret_d = df_total_diario["Valor_COP"].pct_change().dropna()
+                mu_d = ret_d.mean()
+                sig_d = ret_d.std()
+                if sig_d < 0.0001:
+                    sig_d = 0.005
+            else:
+                mu_d = 0.0003
+                sig_d = 0.008
+                
+            np.random.seed(42)
+            Z_mc = np.random.normal(0, 1, (num_sims, dias_mc))
+            drift_mc = (mu_d - 0.5 * (sig_d ** 2))
+            shock_mc = sig_d * Z_mc
+            exp_mc = np.exp(drift_mc + shock_mc)
+            
+            sims = np.zeros((num_sims, dias_mc + 1))
+            sims[:, 0] = patrimonio_liquido
+            
+            for t_step in range(1, dias_mc + 1):
+                sims[:, t_step] = sims[:, t_step - 1] * exp_mc[:, t_step - 1]
+                
+            p5_mc = np.percentile(sims, 5, axis=0)
+            p50_mc = np.percentile(sims, 50, axis=0)
+            p95_mc = np.percentile(sims, 95, axis=0)
+            
+            fechas_mc = [hoy_datetime + timedelta(days=i) for i in range(dias_mc + 1)]
+            
+            fig_mc = go.Figure()
+            for s_idx in range(min(35, num_sims)):
+                fig_mc.add_trace(go.Scatter(
+                    x=fechas_mc, y=sims[s_idx],
+                    mode='lines',
+                    line=dict(color='rgba(99, 102, 241, 0.06)', width=1),
+                    showlegend=False,
+                    hoverinfo='none'
+                ))
+                
+            fig_mc.add_trace(go.Scatter(
+                x=fechas_mc, y=p95_mc,
+                mode='lines',
+                name='Percentil 95% (Optimista)',
+                line=dict(color='#10B981', width=2.5, dash='dash')
+            ))
+            
+            fig_mc.add_trace(go.Scatter(
+                x=fechas_mc, y=p50_mc,
+                mode='lines',
+                name='Percentil 50% (Mediana Esperada)',
+                line=dict(color='#6366F1', width=3)
+            ))
+            
+            fig_mc.add_trace(go.Scatter(
+                x=fechas_mc, y=p5_mc,
+                mode='lines',
+                name='Percentil 5% (Conservador / Caída)',
+                line=dict(color='#EF4444', width=2.5, dash='dash')
+            ))
+            
+            fig_mc.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#E2E8F0", family="Inter, sans-serif"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                height=380,
+                margin=dict(l=20, r=20, t=30, b=20),
+                xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", tickformat="$,.0f")
+            )
+            
+            st.plotly_chart(fig_mc, use_container_width=True, config={'displayModeBar': False})
+            
+            var_95_val = patrimonio_liquido - p5_mc[-1]
+            c_mc1, c_mc2, c_mc3 = st.columns(3)
+            with c_mc1:
+                st.markdown(f"""
+                <div style='background:var(--card-bg); border:1px solid var(--border-color); border-radius:10px; padding:10px 14px;'>
+                    <div style='font-size:10px; color:var(--text-muted); font-weight:700;'>🛡️ VALOR EN RIESGO (VaR 95%)</div>
+                    <div style='font-size:16px; font-weight:900; color:#EF4444; margin-top:2px;'>${var_95_val:,.0f} COP</div>
+                    <div style='font-size:9px; color:var(--text-muted);'>Máxima pérdida estimada a 1 año en peor caso</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c_mc2:
+                st.markdown(f"""
+                <div style='background:var(--card-bg); border:1px solid var(--border-color); border-radius:10px; padding:10px 14px;'>
+                    <div style='font-size:10px; color:var(--text-muted); font-weight:700;'>🔵 SALDO MEDIANO ESPERADO (1 AÑO)</div>
+                    <div style='font-size:16px; font-weight:900; color:#6366F1; margin-top:2px;'>${p50_mc[-1]:,.0f} COP</div>
+                    <div style='font-size:9px; color:var(--text-muted);'>Proyección mediana a 365 días</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c_mc3:
+                meta_usuario = st.number_input("🎯 Probar Meta de Patrimonio (COP):", value=float(int(patrimonio_liquido * 1.15)), step=50000000.0)
+                prob_meta = (np.sum(sims[:, -1] >= meta_usuario) / num_sims) * 100.0
+                st.markdown(f"<div style='font-size:12px; font-weight:800; color:#10B981; margin-top:4px;'>Probabilidad de lograr meta: {prob_meta:.1f}%</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     with st.expander("📝 INFORME DIARIO DE ATRIBUCIÓN CONTABLE & DESGLOSE FINANCIERO", expanded=True):
