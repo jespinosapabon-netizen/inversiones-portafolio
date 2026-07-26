@@ -3176,62 +3176,84 @@ with tab_tactical:
             
             if "Específico" in modo_target:
                 es_modo_especifico = True
-                opciones_activos = ["BTC (Bitcoin - Criptomonedas)", "ETH (Ethereum - Criptomonedas)", "GOOG (Alphabet - Acciones EEUU)", "CIBEST (Bancolombia - Acciones Col)", "GLD (Oro - Commodities)"]
-                tickers_poseidos = [f"{r['Ticker']} ({r['Clase']})" for _, r in inventario_actual.iterrows()]
-                todos_activos_comb = list(dict.fromkeys(opciones_activos + tickers_poseidos))
+                opciones_catalogo = ["BTC - Criptomonedas", "ETH - Criptomonedas", "GOOG - Acciones EEUU", "CIBEST - Acciones Colombia", "GLD - Commodities (Oro)", "PEI - Acciones Colombia", "GRUPOARGOS - Acciones Colombia"]
+                activos_poseidos = [f"{r['Ticker']} - {r['Clase']}" for _, r in maestro_df.iterrows()]
+                todos_activos_comb = list(dict.fromkeys(activos_poseidos + opciones_catalogo))
                 
-                activo_sel_str = st.selectbox("Selecciona el activo a fortalecer/rebalancear:", todos_activos_comb, key="activo_target_sel_v3")
-                activo_destino_custom = activo_sel_str.split(" ")[0]
-                clase_destino_custom = "Criptomonedas" if "Cripto" in activo_sel_str or "BTC" in activo_sel_str or "ETH" in activo_sel_str else ("Acciones EEUU" if "EEUU" in activo_sel_str or "GOOG" in activo_sel_str else "Acciones Colombia")
+                activo_sel_str = st.selectbox("Selecciona cualquier activo para ajustar tu posición (Aumentar o Reducir):", todos_activos_comb, key="activo_target_sel_v4")
+                activo_destino_custom = activo_sel_str.split("-")[0].strip()
+                clase_destino_custom = activo_sel_str.split("-")[1].strip() if "-" in activo_sel_str else "Acciones"
                 
                 unidad_meta = st.radio(
                     "Modalidad de especificación del objetivo:",
                     ["💵 Monto Fijo en Pesos ($ COP)", "📊 Porcentaje sobre el Portafolio (% AUM)"],
                     horizontal=True,
-                    key="unidad_meta_rad_v3"
+                    key="unidad_meta_rad_v4"
                 )
                 
-                # Obtener saldo actual poseído de este activo
-                filtro_pos = inventario_actual[inventario_actual["Ticker"] == activo_destino_custom]
+                # Búsqueda universal robusta en maestro_df (que contiene Total_COP actualizado en vivo)
+                ticker_clean = activo_destino_custom.upper()
+                mask_match = (
+                    (maestro_df["Ticker"].str.upper() == ticker_clean) |
+                    (maestro_df["Ticker"].str.upper().str.startswith(ticker_clean)) |
+                    (maestro_df["Ticker"].str.upper().str.contains(ticker_clean))
+                )
+                if "BTC" in ticker_clean or "BITCOIN" in ticker_clean:
+                    mask_match = mask_match | (maestro_df["Clase"] == "Criptomonedas")
+                    
+                filtro_pos = maestro_df[mask_match]
                 if not filtro_pos.empty:
-                    saldo_actual_activo = filtro_pos["Total_COP"].sum() if "Total_COP" in filtro_pos.columns else (filtro_pos["Cantidad"].values[0] * filtro_pos["Valor_Base_Fijo"].values[0])
+                    saldo_actual_activo = float(filtro_pos["Total_COP"].sum())
                 else:
                     saldo_actual_activo = 0.0
                 
                 if "Pesos" in unidad_meta:
                     monto_traslado_custom = st.number_input(
                         "Monto TARGET deseado para este activo (COP):",
-                        min_value=1000000.0, max_value=500000000.0, value=max(30000000.0, saldo_actual_activo + 10000000.0), step=5000000.0,
-                        key="monto_custom_num_v3"
+                        min_value=0.0, max_value=1000000000.0, value=max(30000000.0, saldo_actual_activo), step=5000000.0,
+                        key="monto_custom_num_v4"
                     )
                     monto_target_total = monto_traslado_custom
-                    monto_faltante_comprar = max(0.0, monto_target_total - saldo_actual_activo)
                     pct_target_total = (monto_target_total / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
                 else:
                     target_pct_asset = st.slider(
                         "Porcentaje TARGET deseado para este activo (% del AUM):",
-                        min_value=0.5, max_value=50.0, value=5.0, step=0.5,
-                        key="target_pct_asset_slider_v3"
+                        min_value=0.0, max_value=60.0, value=max(5.0, round((saldo_actual_activo/patrimonio_total*100.0), 1) if patrimonio_total > 0 else 5.0), step=0.5,
+                        key="target_pct_asset_slider_v4"
                     )
                     pct_target_total = target_pct_asset
                     monto_target_total = patrimonio_total * (target_pct_asset / 100.0)
-                    monto_faltante_comprar = max(0.0, monto_target_total - saldo_actual_activo)
                     
+                diferencia_gap = monto_target_total - saldo_actual_activo
                 pct_actual_activo = (saldo_actual_activo / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
-                pct_faltante_activo = (monto_faltante_comprar / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
                 
-                if saldo_actual_activo > 0:
+                usd_target = (monto_target_total / trm_dia) if trm_dia > 0 else 0.0
+                usd_actual = (saldo_actual_activo / trm_dia) if trm_dia > 0 else 0.0
+                
+                if diferencia_gap > 0:
+                    monto_faltante_comprar = diferencia_gap
+                    pct_faltante_activo = (monto_faltante_comprar / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                    usd_faltante = (monto_faltante_comprar / trm_dia) if trm_dia > 0 else 0.0
+                    
                     st.info(
-                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP ({pct_target_total:.1f}% AUM)\n\n"
-                        f"💼 **Saldo Actual Poseído:** ${saldo_actual_activo:,.0f} COP ({pct_actual_activo:.1f}% AUM)\n\n"
-                        f"🛒 **Monto Faltante por Comprar (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${(monto_faltante_comprar/trm_dia):,.2f} USD** / **{pct_faltante_activo:.1f}% AUM**)"
+                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP (~${usd_target:,.2f} USD | {pct_target_total:.1f}% AUM)\n\n"
+                        f"💼 **Saldo Actual Poseído en Portafolio:** ${saldo_actual_activo:,.0f} COP (~${usd_actual:,.2f} USD | {pct_actual_activo:.1f}% AUM)\n\n"
+                        f"🛒 **Monto Faltante por Comprar (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${usd_faltante:,.2f} USD** | **+{pct_faltante_activo:.1f}% AUM**)"
+                    )
+                elif diferencia_gap < 0:
+                    monto_excedente_vender = abs(diferencia_gap)
+                    monto_faltante_comprar = 0.0
+                    pct_excedente = (monto_excedente_vender / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                    usd_excedente = (monto_excedente_vender / trm_dia) if trm_dia > 0 else 0.0
+                    
+                    st.warning(
+                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP (~${usd_target:,.2f} USD | {pct_target_total:.1f}% AUM)\n\n"
+                        f"💼 **Saldo Actual Poseído en Portafolio:** ${saldo_actual_activo:,.0f} COP (~${usd_actual:,.2f} USD | {pct_actual_activo:.1f}% AUM)\n\n"
+                        f"🔻 **Excedente a Reducir / Vender:** **${monto_excedente_vender:,.0f} COP** (~**${usd_excedente:,.2f} USD** | **-{pct_excedente:.1f}% AUM**)"
                     )
                 else:
-                    st.info(
-                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP ({pct_target_total:.1f}% AUM)\n\n"
-                        f"💼 **Saldo Actual Poseído:** $0 COP (No posees este activo aún)\n\n"
-                        f"🛒 **Monto Faltante por Comprar (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${(monto_faltante_comprar/trm_dia):,.2f} USD**)"
-                    )
+                    monto_faltante_comprar = 0.0
+                    st.success(f"✅ Tu posición actual en **{activo_destino_custom}** (${saldo_actual_activo:,.0f} COP / {pct_actual_activo:.1f}% AUM) está perfectamente alineada con la meta fijada.")
             else:
                 target_usd_pct = st.slider("Target USD General (%):", 10, 80, 50, step=5, key="slider_target_cat_v3")
 
@@ -3243,14 +3265,14 @@ with tab_tactical:
     
     with st.container():
         if es_modo_especifico:
-            monto_target_op = monto_faltante_comprar
-            if monto_target_op <= 0:
-                st.success(f"✅ Tu posición actual en **{activo_destino_custom}** ya alcanza o supera la meta deseada de **${monto_target_total:,.0f} COP**.")
-            else:
-                st.markdown(f"**Resumen de Ejecución:** Para alcanzar la meta de **${monto_target_total:,.0f} COP**, el motor requiere adquirir un faltante de **${monto_target_op:,.0f} COP** (~**${(monto_target_op/trm_dia):,.2f} USD**).")
+            if abs(diferencia_gap) < 100000:
+                st.success(f"✅ Tu posición actual en **{activo_destino_custom}** ya está alineada con la meta deseada de **${monto_target_total:,.0f} COP**.")
+            elif diferencia_gap > 0:
+                monto_target_op = diferencia_gap
+                st.markdown(f"**Resumen de Ejecución (Incremento):** Para alcanzar la meta de **${monto_target_total:,.0f} COP**, el motor requiere adquirir un faltante de **${monto_target_op:,.0f} COP** (~**${(monto_target_op/trm_dia):,.2f} USD**).")
                 
                 cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
-                inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
+                inv_cop = maestro_df[maestro_df["Clase"].isin(cop_classes)].copy()
                 inv_cop["Prioridad"] = inv_cop["Clase"].map({"Liquidez COP": 1, "Fondos de Inversión": 2, "Acciones Colombia": 3})
                 inv_cop = inv_cop.sort_values("Prioridad")
                 
@@ -3258,7 +3280,7 @@ with tab_tactical:
                 monto_pendiente = monto_target_op
                 
                 for order_idx, r_c in inv_cop.iterrows():
-                    if r_c["Ticker"] == activo_destino_custom:
+                    if r_c["Ticker"].upper() == activo_destino_custom.upper():
                         continue
                     if monto_pendiente <= 0:
                         break
@@ -3282,6 +3304,19 @@ with tab_tactical:
                     st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
                 else:
                     st.warning("No se encontró suficiente saldo líquido en COP para financiar el traslado completo.")
+            else:
+                monto_vender_op = abs(diferencia_gap)
+                st.markdown(f"**Resumen de Ejecución (Reducción):** Para recortar tu posición a la meta de **${monto_target_total:,.0f} COP**, el motor requiere vender un excedente de **${monto_vender_op:,.0f} COP** (~**${(monto_vender_op/trm_dia):,.2f} USD**).")
+                plan_filas = [{
+                    "Orden #": "#1",
+                    "Acción": "🔴 VENDER EXCEDENTE",
+                    "Origen (Venta)": f"{activo_destino_custom} ({clase_destino_custom})",
+                    "Monto COP": f"${monto_vender_op:,.0f} COP",
+                    "Monto USD": f"${(monto_vender_op/trm_dia):,.2f} USD",
+                    "Destino (Compra)": "🟢 REASIGNAR a Liquidez COP / Fondos",
+                    "Fricción Estimada": "Variable según broker"
+                }]
+                st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
         else:
             val_usd_meta = patrimonio_total * (target_usd_pct / 100.0)
             diferencia_cop = val_usd_meta - val_usd_actual
