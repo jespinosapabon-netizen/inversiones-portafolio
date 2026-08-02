@@ -3519,49 +3519,37 @@ with tab_tactical:
         st.plotly_chart(fig_rebal, use_container_width=True, config={'displayModeBar': False})
         
     with col_table_shift:
-        filas_matriz = []
+        st.markdown("<p style='font-size:12px; font-weight:800; color:#FFFFFF; margin-bottom:8px; letter-spacing:0.5px;'>📋 MATRIZ DE REASIGNACIÓN NETA</p>", unsafe_allow_html=True)
+        
+        filas_tabla = []
         for _, r_mat in df_clases_despues.sort_values("Delta_Pct", ascending=False).iterrows():
             d_pct = r_mat["Delta_Pct"]
             d_cop = r_mat["Delta_COP"]
             if abs(d_pct) < 0.05:
-                accion_txt = "<span style='color:#94A3B8; font-weight:600; font-size:11px;'>▪ MANTENER</span>"
-                var_txt = "<span style='color:#94A3B8;'>0.0%</span>"
+                accion = "▪ MANTENER"
+                var_str = "0.0%"
             elif d_pct > 0:
-                accion_txt = "<span style='color:#10B981; font-weight:800; font-size:11px;'>🟢 INCREMENTAR</span>"
-                var_txt = f"<span style='color:#10B981; font-weight:800;'>+{d_pct:.1f}% (+${d_cop/1e6:,.1f}M)</span>"
+                accion = "🟢 INCREMENTAR"
+                var_str = f"+{d_pct:.1f}% (+${d_cop/1e6:,.1f}M)"
             else:
-                accion_txt = "<span style='color:#EF4444; font-weight:800; font-size:11px;'>🔴 REDUCIR</span>"
-                var_txt = f"<span style='color:#EF4444; font-weight:800;'>{d_pct:.1f}% (-${abs(d_cop)/1e6:,.1f}M)</span>"
+                accion = "🔴 REDUCIR"
+                var_str = f"{d_pct:.1f}% (-${abs(d_cop)/1e6:,.1f}M)"
                 
-            filas_matriz.append(f"""
-            <tr style='border-bottom: 1px solid #1F2937; font-size: 11.5px;'>
-                <td style='padding: 8px 6px; color: #F3F4F6; font-weight: 600;'>{r_mat['Clase']}</td>
-                <td style='text-align: center; color: #9CA3AF;'>{r_mat['Pct_Antes']:.1f}%</td>
-                <td style='text-align: center; color: #F3F4F6; font-weight: 700;'>{r_mat['Pct_Despues']:.1f}%</td>
-                <td style='text-align: right; padding-right: 6px;'>{var_txt}</td>
-                <td style='text-align: center;'>{accion_txt}</td>
-            </tr>
-            """)
+            filas_tabla.append({
+                "Clase de Activo": r_mat["Clase"],
+                "Antes": f"{r_mat['Pct_Antes']:.1f}%",
+                "Después": f"{r_mat['Pct_Despues']:.1f}%",
+                "Variación Neta": var_str,
+                "Acción Táctica": accion
+            })
             
-        st.markdown(f"""
-        <div style='background-color: #111827 !important; background: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 12px; padding: 14px; height: 350px; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5);'>
-            <div style='font-size: 11px; font-weight: 800; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px;'>MATRIZ DE REASIGNACIÓN NETA</div>
-            <table style='width: 100%; border-collapse: collapse; color: #F3F4F6 !important;'>
-                <thead>
-                    <tr style='border-bottom: 2px solid #374151; font-size: 10.5px; font-weight: 800; color: #9CA3AF; text-transform: uppercase;'>
-                        <th style='text-align: left; padding: 6px 4px;'>Clase</th>
-                        <th style='text-align: center; padding: 6px 4px;'>Antes</th>
-                        <th style='text-align: center; padding: 6px 4px;'>Después</th>
-                        <th style='text-align: right; padding: 6px 4px;'>Variación</th>
-                        <th style='text-align: center; padding: 6px 4px;'>Acción</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {"".join(filas_matriz)}
-                </tbody>
-            </table>
-        </div>
-        """, unsafe_allow_html=True)
+        df_matriz_view = pd.DataFrame(filas_tabla)
+        st.dataframe(
+            df_matriz_view,
+            use_container_width=True,
+            hide_index=True,
+            height=310
+        )
         
     # 2. Resumen Ejecutivo de Métricas Financieras Pro-Forma (KPI Cards con Explicaciones)
     st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:16px; margin-bottom:8px;'>B. RESUMEN EJECUTIVO DE MÉTRICAS PRO-FORMA & PERFIL DE RIESGO</p>", unsafe_allow_html=True)
