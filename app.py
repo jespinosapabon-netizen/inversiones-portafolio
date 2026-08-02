@@ -3484,10 +3484,11 @@ with tab_tactical:
             x=df_clases_despues["Pct_Antes"],
             name="Antes (Actual)",
             orientation='h',
-            marker_color='#64748B',
-            text=[f"{v:.1f}%" for v in df_clases_despues["Pct_Antes"]],
-            textposition='auto',
-            textfont=dict(color='#FFFFFF', size=11, family="Inter, sans-serif")
+            marker=dict(color='#475569', line=dict(color='#64748B', width=1)),
+            text=[f"{v:.1f}%" if v > 0 else "" for v in df_clases_despues["Pct_Antes"]],
+            textposition='outside',
+            cliponaxis=False,
+            textfont=dict(color='#94A3B8', size=11, family="Inter, sans-serif")
         ))
         
         fig_rebal.add_trace(go.Bar(
@@ -3495,22 +3496,25 @@ with tab_tactical:
             x=df_clases_despues["Pct_Despues"],
             name="Después (Pro-Forma)",
             orientation='h',
-            marker_color='#10B981',
-            text=[f"{v:.1f}%" for v in df_clases_despues["Pct_Despues"]],
-            textposition='auto',
-            textfont=dict(color='#FFFFFF', size=11, family="Inter, sans-serif")
+            marker=dict(color='#10B981', line=dict(color='#34D399', width=1)),
+            text=[f"{v:.1f}%" if v > 0 else "" for v in df_clases_despues["Pct_Despues"]],
+            textposition='outside',
+            cliponaxis=False,
+            textfont=dict(color='#10B981', size=11, family="Inter, sans-serif")
         ))
         
         fig_rebal.update_layout(
             barmode='group',
+            bargap=0.22,
+            bargroupgap=0.1,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#FFFFFF", family="Inter, sans-serif"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color="#FFFFFF", size=11)),
-            height=290,
-            margin=dict(l=10, r=10, t=30, b=10),
-            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", title="% del Portafolio Líquido", ticksuffix="%"),
-            yaxis=dict(autorange="reversed")
+            legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1, font=dict(color="#FFFFFF", size=11)),
+            height=350,
+            margin=dict(l=10, r=40, t=30, b=10),
+            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)", title="% del Portafolio Líquido", ticksuffix="%", tickfont=dict(color="#94A3B8")),
+            yaxis=dict(autorange="reversed", tickfont=dict(color="#FFFFFF", size=12.5, family="Inter, sans-serif"))
         )
         st.plotly_chart(fig_rebal, use_container_width=True, config={'displayModeBar': False})
         
@@ -3520,37 +3524,41 @@ with tab_tactical:
             d_pct = r_mat["Delta_Pct"]
             d_cop = r_mat["Delta_COP"]
             if abs(d_pct) < 0.05:
-                accion_txt = "<span style='color:#94A3B8; font-weight:600;'>▪ MANTENER</span>"
+                accion_txt = "<span style='color:#94A3B8; font-weight:600; font-size:11px;'>▪ MANTENER</span>"
                 var_txt = "<span style='color:#94A3B8;'>0.0%</span>"
             elif d_pct > 0:
-                accion_txt = "<span style='color:#10B981; font-weight:800;'>🟢 INCREMENTAR</span>"
+                accion_txt = "<span style='color:#10B981; font-weight:800; font-size:11px;'>🟢 INCREMENTAR</span>"
                 var_txt = f"<span style='color:#10B981; font-weight:800;'>+{d_pct:.1f}% (+${d_cop/1e6:,.1f}M)</span>"
             else:
-                accion_txt = "<span style='color:#EF4444; font-weight:800;'>🔴 REDUCIR</span>"
+                accion_txt = "<span style='color:#EF4444; font-weight:800; font-size:11px;'>🔴 REDUCIR</span>"
                 var_txt = f"<span style='color:#EF4444; font-weight:800;'>{d_pct:.1f}% (-${abs(d_cop)/1e6:,.1f}M)</span>"
                 
             filas_matriz.append(f"""
-            <tr style='border-bottom:1px solid rgba(255,255,255,0.08); font-size:11.5px;'>
-                <td style='padding:6px; color:#FFFFFF; font-weight:600;'>{r_mat['Clase']}</td>
-                <td style='text-align:center; color:#94A3B8;'>{r_mat['Pct_Antes']:.1f}%</td>
-                <td style='text-align:center; color:#FFFFFF; font-weight:700;'>{r_mat['Pct_Despues']:.1f}%</td>
-                <td style='text-align:right;'>{var_txt}</td>
-                <td style='text-align:center;'>{accion_txt}</td>
+            <tr style='border-bottom: 1px solid #1F2937; font-size: 11.5px;'>
+                <td style='padding: 8px 6px; color: #F3F4F6; font-weight: 600;'>{r_mat['Clase']}</td>
+                <td style='text-align: center; color: #9CA3AF;'>{r_mat['Pct_Antes']:.1f}%</td>
+                <td style='text-align: center; color: #F3F4F6; font-weight: 700;'>{r_mat['Pct_Despues']:.1f}%</td>
+                <td style='text-align: right; padding-right: 6px;'>{var_txt}</td>
+                <td style='text-align: center;'>{accion_txt}</td>
             </tr>
             """)
             
         st.markdown(f"""
-        <div style='background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; height: 290px; overflow-y: auto;'>
-            <div style='font-size: 11px; font-weight: 800; color: #94A3B8; text-transform: uppercase; margin-bottom: 8px;'>MATRIZ DE REASIGNACIÓN NETA</div>
-            <table style='width:100%; border-collapse:collapse; color:#FFFFFF;'>
-                <tr style='border-bottom:1px solid rgba(255,255,255,0.15); font-size:10.5px; font-weight:700; color:#94A3B8;'>
-                    <th style='text-align:left; padding:4px;'>Clase</th>
-                    <th style='text-align:center;'>Antes</th>
-                    <th style='text-align:center;'>Después</th>
-                    <th style='text-align:right;'>Variación</th>
-                    <th style='text-align:center;'>Acción</th>
-                </tr>
-                {"".join(filas_matriz)}
+        <div style='background-color: #111827 !important; background: #111827 !important; border: 1px solid #1F2937 !important; border-radius: 12px; padding: 14px; height: 350px; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5);'>
+            <div style='font-size: 11px; font-weight: 800; color: #9CA3AF; text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px;'>MATRIZ DE REASIGNACIÓN NETA</div>
+            <table style='width: 100%; border-collapse: collapse; color: #F3F4F6 !important;'>
+                <thead>
+                    <tr style='border-bottom: 2px solid #374151; font-size: 10.5px; font-weight: 800; color: #9CA3AF; text-transform: uppercase;'>
+                        <th style='text-align: left; padding: 6px 4px;'>Clase</th>
+                        <th style='text-align: center; padding: 6px 4px;'>Antes</th>
+                        <th style='text-align: center; padding: 6px 4px;'>Después</th>
+                        <th style='text-align: right; padding: 6px 4px;'>Variación</th>
+                        <th style='text-align: center; padding: 6px 4px;'>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {"".join(filas_matriz)}
+                </tbody>
             </table>
         </div>
         """, unsafe_allow_html=True)
