@@ -3431,62 +3431,132 @@ with tab_tactical:
     usd_exp_antes = exp_usd_pct_actual
     usd_exp_despues = (target_usd_pct if not es_modo_especifico else (usd_exp_antes + (monto_faltante_comprar / patrimonio_liquido * 100) if "Cripto" in clase_destino_custom or "EEUU" in clase_destino_custom or "Oro" in clase_destino_custom else usd_exp_antes))
     
-    # 1. Gráficos de Dona Duales por Categorías de Activos (Side-by-Side High Contrast Asset Donut Charts)
-    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-bottom:8px;'>A. DISTRIBUCIÓN POR CLASE DE ACTIVO LÍQUIDO (ANTES VS. DESPUÉS REBALANCEADO)</p>", unsafe_allow_html=True)
-    col_dona1, col_dona2 = st.columns(2)
+    # 1. Gráfico de Barras Comparativo Horizontales (Antes vs. Después) & Tabla de Desplazamiento
+    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-bottom:8px;'>A. COMPARATIVA ESTRUCTURAL DEL REBALANCEO (ANTES VS. DESPUÉS PRO-FORMA)</p>", unsafe_allow_html=True)
     
     # Agrupar inventario maestro actual por Clase (Excluyendo Propiedad Raíz)
     df_clases_antes = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"].groupby("Clase")["Total_COP"].sum().reset_index()
+    df_clases_antes["Pct_Antes"] = (df_clases_antes["Total_COP"] / patrimonio_liquido * 100.0) if patrimonio_liquido > 0 else 0.0
     
-    # Crear distribución pro-forma simulada
-    df_clases_despues = df_clases_antes.copy()
+    df_clases_despues = df_clases_antes.copy().rename(columns={"Total_COP": "Total_COP_Antes"})
+    df_clases_despues["Total_COP_Despues"] = df_clases_despues["Total_COP_Antes"]
+    
     if es_modo_especifico and monto_faltante_comprar > 0:
-        # Añadir monto al activo destino
         if clase_destino_custom in df_clases_despues["Clase"].values:
-            df_clases_despues.loc[df_clases_despues["Clase"] == clase_destino_custom, "Total_COP"] += monto_faltante_comprar
+            df_clases_despues.loc[df_clases_despues["Clase"] == clase_destino_custom, "Total_COP_Despues"] += monto_faltante_comprar
         else:
-            df_clases_despues = pd.concat([df_clases_despues, pd.DataFrame([{"Clase": clase_destino_custom, "Total_COP": monto_faltante_comprar}])], ignore_index=True)
+            df_clases_despues = pd.concat([df_clases_despues, pd.DataFrame([{"Clase": clase_destino_custom, "Total_COP_Antes": 0.0, "Pct_Antes": 0.0, "Total_COP_Despues": monto_faltante_comprar}])], ignore_index=True)
             
-        # Restar proporcionalmente de Fondos de Inversión y Liquidez COP
         monto_restar_rem = monto_faltante_comprar
         for idx_sub, r_sub in df_clases_despues.iterrows():
             if r_sub["Clase"] in ["Liquidez COP", "Fondos de Inversión"] and monto_restar_rem > 0:
-                resta = min(r_sub["Total_COP"] * 0.7, monto_restar_rem)
-                df_clases_despues.at[idx_sub, "Total_COP"] -= resta
+                resta = min(r_sub["Total_COP_Despues"] * 0.7, monto_restar_rem)
+                df_clases_despues.at[idx_sub, "Total_COP_Despues"] -= resta
                 monto_restar_rem -= resta
-                
-    palette_colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6"]
+    elif not es_modo_especifico and (target_usd_pct != exp_usd_pct_actual):
+        val_usd_target_sim = patrimonio_liquido * (target_usd_pct / 100.0)
+        dif_usd_sim = val_usd_target_sim - val_usd_actual
+        if dif_usd_sim > 0:
+            if "Liquidez USD" in df_clases_despues["Clase"].values:
+                df_clases_despues.loc[df_clases_despues["Clase"] == "Liquidez USD", "Total_COP_Despues"] += dif_usd_sim
+            else:
+                df_clases_despues = pd.concat([df_clases_despues, pd.DataFrame([{"Clase": "Liquidez USD", "Total_COP_Antes": 0.0, "Pct_Antes": 0.0, "Total_COP_Despues": dif_usd_sim}])], ignore_index=True)
+            
+            monto_restar_rem = dif_usd_sim
+            for idx_sub, r_sub in df_clases_despues.iterrows():
+                if r_sub["Clase"] in ["Liquidez COP", "Fondos de Inversión"] and monto_restar_rem > 0:
+                    resta = min(r_sub["Total_COP_Despues"] * 0.7, monto_restar_rem)
+                    df_clases_despues.at[idx_sub, "Total_COP_Despues"] -= resta
+                    monto_restar_rem -= resta
+                    
+    tot_liq_despues = df_clases_despues["Total_COP_Despues"].sum()
+    df_clases_despues["Pct_Despues"] = (df_clases_despues["Total_COP_Despues"] / tot_liq_despues * 100.0) if tot_liq_despues > 0 else 0.0
+    df_clases_despues["Delta_Pct"] = df_clases_despues["Pct_Despues"] - df_clases_despues["Pct_Antes"]
+    df_clases_despues["Delta_COP"] = df_clases_despues["Total_COP_Despues"] - df_clases_despues["Total_COP_Antes"]
+
+    col_chart_bar, col_table_shift = st.columns([3.2, 2.8])
     
-    with col_dona1:
-        fig_d1 = px.pie(df_clases_antes, values="Total_COP", names="Clase", hole=0.45, color_discrete_sequence=palette_colors)
-        fig_d1.update_layout(
-            title=dict(text="<b>Composición Líquida Actual (Antes)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
+    with col_chart_bar:
+        fig_rebal = go.Figure()
+        
+        fig_rebal.add_trace(go.Bar(
+            y=df_clases_despues["Clase"],
+            x=df_clases_despues["Pct_Antes"],
+            name="Antes (Actual)",
+            orientation='h',
+            marker_color='#64748B',
+            text=[f"{v:.1f}%" for v in df_clases_despues["Pct_Antes"]],
+            textposition='auto',
+            textfont=dict(color='#FFFFFF', size=11, family="Inter, sans-serif")
+        ))
+        
+        fig_rebal.add_trace(go.Bar(
+            y=df_clases_despues["Clase"],
+            x=df_clases_despues["Pct_Despues"],
+            name="Después (Pro-Forma)",
+            orientation='h',
+            marker_color='#10B981',
+            text=[f"{v:.1f}%" for v in df_clases_despues["Pct_Despues"]],
+            textposition='auto',
+            textfont=dict(color='#FFFFFF', size=11, family="Inter, sans-serif")
+        ))
+        
+        fig_rebal.update_layout(
+            barmode='group',
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#FFFFFF", family="Inter, sans-serif"),
-            legend=dict(font=dict(color="#FFFFFF", size=11), orientation="h", y=-0.1),
-            height=260,
-            margin=dict(l=10, r=10, t=35, b=10)
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color="#FFFFFF", size=11)),
+            height=290,
+            margin=dict(l=10, r=10, t=30, b=10),
+            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", title="% del Portafolio Líquido", ticksuffix="%"),
+            yaxis=dict(autorange="reversed")
         )
-        fig_d1.update_traces(textposition='inside', textinfo='percent+label', textfont_color="#FFFFFF")
-        st.plotly_chart(fig_d1, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_rebal, use_container_width=True, config={'displayModeBar': False})
         
-    with col_dona2:
-        fig_d2 = px.pie(df_clases_despues, values="Total_COP", names="Clase", hole=0.45, color_discrete_sequence=palette_colors)
-        fig_d2.update_layout(
-            title=dict(text="<b>Composición Líquida Pro-Forma (Después)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#FFFFFF", family="Inter, sans-serif"),
-            legend=dict(font=dict(color="#FFFFFF", size=11), orientation="h", y=-0.1),
-            height=260,
-            margin=dict(l=10, r=10, t=35, b=10)
-        )
-        fig_d2.update_traces(textposition='inside', textinfo='percent+label', textfont_color="#FFFFFF")
-        st.plotly_chart(fig_d2, use_container_width=True, config={'displayModeBar': False})
+    with col_table_shift:
+        filas_matriz = []
+        for _, r_mat in df_clases_despues.sort_values("Delta_Pct", ascending=False).iterrows():
+            d_pct = r_mat["Delta_Pct"]
+            d_cop = r_mat["Delta_COP"]
+            if abs(d_pct) < 0.05:
+                accion_txt = "<span style='color:#94A3B8; font-weight:600;'>▪ MANTENER</span>"
+                var_txt = "<span style='color:#94A3B8;'>0.0%</span>"
+            elif d_pct > 0:
+                accion_txt = "<span style='color:#10B981; font-weight:800;'>🟢 INCREMENTAR</span>"
+                var_txt = f"<span style='color:#10B981; font-weight:800;'>+{d_pct:.1f}% (+${d_cop/1e6:,.1f}M)</span>"
+            else:
+                accion_txt = "<span style='color:#EF4444; font-weight:800;'>🔴 REDUCIR</span>"
+                var_txt = f"<span style='color:#EF4444; font-weight:800;'>{d_pct:.1f}% (-${abs(d_cop)/1e6:,.1f}M)</span>"
+                
+            filas_matriz.append(f"""
+            <tr style='border-bottom:1px solid rgba(255,255,255,0.08); font-size:11.5px;'>
+                <td style='padding:6px; color:#FFFFFF; font-weight:600;'>{r_mat['Clase']}</td>
+                <td style='text-align:center; color:#94A3B8;'>{r_mat['Pct_Antes']:.1f}%</td>
+                <td style='text-align:center; color:#FFFFFF; font-weight:700;'>{r_mat['Pct_Despues']:.1f}%</td>
+                <td style='text-align:right;'>{var_txt}</td>
+                <td style='text-align:center;'>{accion_txt}</td>
+            </tr>
+            """)
+            
+        st.markdown(f"""
+        <div style='background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; height: 290px; overflow-y: auto;'>
+            <div style='font-size: 11px; font-weight: 800; color: #94A3B8; text-transform: uppercase; margin-bottom: 8px;'>MATRIZ DE REASIGNACIÓN NETA</div>
+            <table style='width:100%; border-collapse:collapse; color:#FFFFFF;'>
+                <tr style='border-bottom:1px solid rgba(255,255,255,0.15); font-size:10.5px; font-weight:700; color:#94A3B8;'>
+                    <th style='text-align:left; padding:4px;'>Clase</th>
+                    <th style='text-align:center;'>Antes</th>
+                    <th style='text-align:center;'>Después</th>
+                    <th style='text-align:right;'>Variación</th>
+                    <th style='text-align:center;'>Acción</th>
+                </tr>
+                {"".join(filas_matriz)}
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
         
-    # 2. Resumen Ejecutivo de Métricas Financieras Pro-Forma (KPI Cards)
-    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:12px; margin-bottom:8px;'>B. RESUMEN EJECUTIVO DE MÉTRICAS PRO-FORMA & PERFIL DE RIESGO</p>", unsafe_allow_html=True)
+    # 2. Resumen Ejecutivo de Métricas Financieras Pro-Forma (KPI Cards con Explicaciones)
+    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:16px; margin-bottom:8px;'>B. RESUMEN EJECUTIVO DE MÉTRICAS PRO-FORMA & PERFIL DE RIESGO</p>", unsafe_allow_html=True)
     
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
     
@@ -3508,12 +3578,16 @@ with tab_tactical:
     
     with col_kpi1:
         st.metric("Retorno Proyectado (CAGR)", f"{ret_despues_pct:.1f}%", f"{ret_despues_pct - ret_antes_pct:+.1f}% vs Actual")
+        st.markdown("<p style='font-size:11px; color:var(--text-muted); margin-top:4px; line-height:1.35;'>💡 <b>CAGR:</b> Tasa de crecimiento anual compuesto esperada tras el rebalanceo pro-forma.</p>", unsafe_allow_html=True)
     with col_kpi2:
         st.metric("Volatilidad Anualizada (σ)", f"{vol_despues:.1f}%", f"{vol_despues - vol_antes:+.1f}% vs Actual", delta_color="inverse")
+        st.markdown("<p style='font-size:11px; color:var(--text-muted); margin-top:4px; line-height:1.35;'>💡 <b>Riesgo (σ):</b> Fluctuación anual esperada; menor volatilidad refleja mayor estabilidad.</p>", unsafe_allow_html=True)
     with col_kpi3:
         st.metric("Ratio de Sharpe Estimado", f"{sharpe_despues:.2f}", f"{sharpe_despues - sharpe_antes:+.2f} vs Actual")
+        st.markdown("<p style='font-size:11px; color:var(--text-muted); margin-top:4px; line-height:1.35;'>💡 <b>Eficiencia:</b> Rendimiento excedente generado por cada unidad de riesgo (vs 5% libre de riesgo).</p>", unsafe_allow_html=True)
     with col_kpi4:
         st.metric("VaR 95% (Pérdida Máx 1 Año)", f"${var_95_despues/1e6:,.0f}M COP", f"{var_pct_despues:.1f}% AUM Líquido", delta_color="inverse")
+        st.markdown("<p style='font-size:11px; color:var(--text-muted); margin-top:4px; line-height:1.35;'>💡 <b>VaR 95%:</b> Máxima pérdida anual estimada al 95% de confianza bajo condiciones normales.</p>", unsafe_allow_html=True)
         
     # 3. Matriz de Estrés Cambiario (TRM) y Monte Carlo Overlay
     st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:12px; margin-bottom:8px;'>C. MATRIZ DE ESTRÉS CAMBIARIO & MONTE CARLO PROYECTADO</p>", unsafe_allow_html=True)
