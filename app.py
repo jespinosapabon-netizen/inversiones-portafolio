@@ -1381,12 +1381,50 @@ def consultar_mercado_cripto_batch(tickers):
 # -----------------------------------------------------------------------------
 import xml.etree.ElementTree as ET
 
-def obtener_noticias_colombia():
+def obtener_noticias_colombia(tickers_co=None):
     import email.utils
+    import urllib.parse
     from datetime import timezone, timedelta
-    url = "https://news.google.com/rss/search?q=Bolsa+de+Valores+de+Colombia+OR+Bancolombia+OR+Grupo+Argos+OR+PEI+Colombia&hl=es-419&gl=CO&ceid=CO:es-419"
+    
+    if tickers_co is None:
+        tickers_co = []
+        
+    MAPEO_LOCAL_KEYWORDS = {
+        "CIBEST": ["Bancolombia", "CIBEST"],
+        "BCOLOMBIA": ["Bancolombia"],
+        "GRUPOARGOS": ["Grupo Argos", "Argos", "PFGRUPOARG"],
+        "PFGRUPOARG": ["Grupo Argos", "Argos"],
+        "PEI": ["PEI", "Titularizadora Inmobiliaria"],
+        "ECOPETROL": ["Ecopetrol"],
+        "NUTRESA": ["Nutresa", "Grupo Nutresa"],
+        "GEB": ["Grupo Energía Bogotá", "GEB"],
+        "ISA": ["ISA", "Interconexión Eléctrica"],
+        "MINEROS": ["Mineros"],
+        "CORFICOL": ["Corficolombiana"],
+        "CEMENTOS": ["Cementos Argos", "Cemargos"],
+        "BVC": ["Bolsa de Valores de Colombia", "BVC"],
+        "GXTESCOL": ["TES Colombia", "Deuda Pública Colombia"]
+    }
+    
+    # Extraer palabras clave de búsqueda basadas en los activos poseídos
+    palabras_clave = set()
+    for t in tickers_co:
+        t_clean = str(t).upper().strip()
+        if t_clean in MAPEO_LOCAL_KEYWORDS:
+            for kw in MAPEO_LOCAL_KEYWORDS[t_clean]:
+                palabras_clave.add(kw)
+        else:
+            palabras_clave.add(t_clean)
+            
+    # Añadir términos generales de mercado
+    palabras_clave.add("Bolsa de Valores de Colombia")
+    palabras_clave.add("MSCI Colcap")
+    
+    query_str = " OR ".join(list(palabras_clave)[:8])
+    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query_str)}&hl=es-419&gl=CO&ceid=CO:es-419"
     headers = {"User-Agent": "Mozilla/5.0"}
     noticias = []
+    
     try:
         res = requests.get(url, headers=headers, timeout=8)
         if res.status_code == 200:
@@ -1394,9 +1432,9 @@ def obtener_noticias_colombia():
             limit_date = datetime.now(timezone.utc) - timedelta(days=15)
             
             for item in root.findall(".//item"):
-                pub_date_str = item.find("pubDate").text
+                pub_date_str = item.find("pubDate").text if item.find("pubDate") is not None else ""
                 
-                # Filtrar por fecha (máximo 15 días de antigüedad)
+                # Filtrar por fecha (máximo 15 días)
                 if pub_date_str:
                     try:
                         dt = email.utils.parsedate_to_datetime(pub_date_str)
@@ -1406,11 +1444,11 @@ def obtener_noticias_colombia():
                     except Exception:
                         pass
                 
-                title = item.find("title").text
-                link = item.find("link").text
+                title = item.find("title").text if item.find("title") is not None else ""
+                link = item.find("link").text if item.find("link") is not None else ""
                 source = item.find("source").text if item.find("source") is not None else "Google News"
                 
-                # Format Colombian source names cleanly
+                # Formatear nombre de fuente colombiana
                 if "La República" in title or "republica" in link:
                     source = "Diario La República 🇨🇴"
                 elif "Valora" in title or "valora" in link:
@@ -1424,52 +1462,67 @@ def obtener_noticias_colombia():
                 else:
                     source = f"{source} 🇨🇴"
                     
-                # Clean Google News suffix from titles e.g. " - La República"
                 if " - " in title:
                     title = " - ".join(title.split(" - ")[:-1])
                     
+                # Validar si el título menciona un activo poseído por el usuario
+                matched_ticker = None
+                for t in tickers_co:
+                    t_clean = str(t).upper().strip()
+                    kws = MAPEO_LOCAL_KEYWORDS.get(t_clean, [t_clean])
+                    if any(kw.lower() in title.lower() for kw in kws):
+                        matched_ticker = t_clean
+                        break
+                        
+                is_owned = matched_ticker is not None
+                prefix_tag = f"[{matched_ticker} 🇨🇴]" if is_owned else "[MERCADO LOCAL 🇨🇴]"
+                
                 noticias.append({
-                    "title": title,
+                    "title": f"{prefix_tag} {title}",
                     "link": link,
                     "publisher": source,
                     "time": pub_date_str[:16] if pub_date_str else "Reciente",
                     "type": "Local 🇨🇴",
-                    "accent_color": "#10B981"
+                    "accent_color": "#10B981" if is_owned else "#059669",
+                    "is_owned": is_owned,
+                    "priority": 1 if is_owned else 2
                 })
                 
-                if len(noticias) >= 10:  # Mantener un límite de hasta 10 noticias frescas
+                if len(noticias) >= 12:
                     break
     except Exception:
         pass
     return noticias
 
-def obtener_noticias_internacionales(tickers):
+def obtener_noticias_internacionales(tickers_usd=None):
     from datetime import timezone, timedelta
     noticias = []
     
-    # Tabla de mapeo para tickers estándar de Yahoo Finance
-    mapping = {}
-    for t in tickers:
-        if t in ["BTC", "ETH", "ADA", "XRP"]:
-            mapping[f"{t}-USD"] = t
-        elif t in ["GOOG", "MSFT", "IONQ", "GLD", "UNH", "V"]:
-            mapping[t] = t
-            
-    top_tickers = list(mapping.keys())[:4]
+    if tickers_usd is None:
+        tickers_usd = ["BTC", "ETH", "GOOG", "GLD"]
+        
+    tickers_usd_list = [str(t).upper().strip() for t in tickers_usd if t]
+    if not tickers_usd_list:
+        tickers_usd_list = ["BTC", "ETH", "GOOG", "GLD"]
+        
     limit_date = datetime.now(timezone.utc) - timedelta(days=15)
     
-    for t_yf in top_tickers:
-        t_orig = mapping[t_yf]
+    # Consultar noticias de cada activo poseído por el usuario
+    for t_orig in tickers_usd_list:
+        # Convertir a ticker de Yahoo Finance
+        if t_orig in ["BTC", "ETH", "ADA", "XRP", "SOL", "DOT"]:
+            t_yf = f"{t_orig}-USD"
+        else:
+            t_yf = t_orig
+            
         try:
             ticker_obj = yf.Ticker(t_yf)
             news_items = ticker_obj.news
             if news_items:
                 ticker_count = 0
                 for item in news_items:
-                    # Soporte para formato nuevo anidado y formato anterior plano
                     content = item.get("content", item) if isinstance(item.get("content"), dict) else item
                     
-                    # Extraer fecha de publicación y filtrar por antigüedad (máximo 15 días)
                     pub_time_stamp = content.get("providerPublishTime")
                     pub_date_str = content.get("pubDate")
                     
@@ -1501,7 +1554,6 @@ def obtener_noticias_internacionales(tickers):
                     if not title:
                         continue
                         
-                    # Extraer enlace seguro
                     link = ""
                     if isinstance(content.get("clickThroughUrl"), dict):
                         link = content.get("clickThroughUrl", {}).get("url", "")
@@ -1510,7 +1562,6 @@ def obtener_noticias_internacionales(tickers):
                     else:
                         link = content.get("link", "")
                         
-                    # Extraer publicador / fuente
                     publisher = "Yahoo Finance"
                     if isinstance(content.get("provider"), dict):
                         publisher = content.get("provider", {}).get("displayName", "Yahoo Finance")
@@ -1518,27 +1569,36 @@ def obtener_noticias_internacionales(tickers):
                         publisher = content.get("publisher", "Yahoo Finance")
                         
                     noticias.append({
-                        "title": f"[{t_orig}] {title}",
+                        "title": f"[{t_orig} 🇺🇸] {title}",
                         "link": link,
                         "publisher": f"{publisher} 🇺🇸",
                         "time": fecha_str,
                         "type": "Internacional 🇺🇸",
-                        "accent_color": "#6366F1"
+                        "accent_color": "#6366F1",
+                        "is_owned": True,
+                        "priority": 1
                     })
                     
                     ticker_count += 1
-                    if ticker_count >= 3:  # Máximo 3 noticias por ticker
+                    if ticker_count >= 3:
                         break
         except Exception:
             pass
+            
     return noticias
 
 @st.cache_data(ttl=1800)
-def cargar_radar_noticias(tickers_usd):
-    noticias_locales = obtener_noticias_colombia()
+def cargar_radar_noticias(tickers_co_tuple, tickers_usd_tuple):
+    tickers_co = list(tickers_co_tuple) if tickers_co_tuple else []
+    tickers_usd = list(tickers_usd_tuple) if tickers_usd_tuple else []
+    
+    noticias_locales = obtener_noticias_colombia(tickers_co)
     noticias_inter = obtener_noticias_internacionales(tickers_usd)
-    # Return sorted or interlaid results
-    return noticias_locales + noticias_inter
+    
+    todas = noticias_locales + noticias_inter
+    # Ordenar priorizando activos poseídos (priority 1 antes de priority 2)
+    todas_ordenadas = sorted(todas, key=lambda x: x.get("priority", 2))
+    return todas_ordenadas
 
 # -----------------------------------------------------------------------------
 # CORE PIPELINE CONTABLE EN VIVO (MÁXIMA EXACTITUD Y CAMBIO DE DIVISA EXACTO)
@@ -2915,12 +2975,16 @@ with tab_news:
     st.markdown(f"<p style='color:var(--text-color); font-weight:700; font-size:15px; margin-bottom:10px;'>📰 RADAR DE NOTICIAS & INTELIGENCIA DE MERCADO</p>", unsafe_allow_html=True)
     st.markdown("<p style='font-size:12px; color:var(--text-muted); margin-bottom:15px;'>Noticias recientes de última hora sobre tus activos en cartera de Colombia y del mundo. Datos actualizados y cacheados cada 30 minutos.</p>", unsafe_allow_html=True)
     
-    # 1. Obtener lista de tickers activos
-    tickers_portafolio = list(maestro_df["Ticker"].unique())
+    # 1. Obtener activos poseídos divididos por mercado (Local vs Internacional)
+    activos_co = maestro_df[maestro_df["Clase"].isin(["Acciones Colombia", "Inmobiliario Bursátil", "Fondos de Inversión", "Liquidez COP"])]
+    activos_us = maestro_df[maestro_df["Clase"].isin(["Acciones EEUU", "Commodities (Oro)", "Criptomonedas", "Liquidez USD"])]
     
-    # 2. Cargar noticias (con cache inteligente)
-    with st.spinner("Sincronizando últimas noticias del mercado..."):
-        lista_noticias = cargar_radar_noticias(tickers_portafolio)
+    tickers_co_poseidos = tuple(list(activos_co["Ticker"].unique()))
+    tickers_us_poseidos = tuple(list(activos_us["Ticker"].unique()))
+    
+    # 2. Cargar noticias priorizadas por portafolio (con cache inteligente de 30 min)
+    with st.spinner("Sincronizando y priorizando noticias de tus activos en cartera..."):
+        lista_noticias = cargar_radar_noticias(tickers_co_poseidos, tickers_us_poseidos)
         
     if not lista_noticias:
         st.info("ℹ️ No se encontraron noticias recientes para tus activos en este momento. Reintenta más tarde o verifica tu conexión a internet.")
@@ -2949,13 +3013,15 @@ with tab_news:
             for idx, n in enumerate(noticias_filtradas):
                 col_target = cols_noticias[idx % 2]
                 
+                status_tag = "🎯 POSICIÓN EN CARTERA" if n.get("is_owned") else "🌐 NOTICIA DE MERCADO"
+                
                 # HTML Card
                 card_html = f"""
                 <div class="news-card" style="border-left: 4px solid {n['accent_color']};">
                     <div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px;">
                             <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: {n['accent_color']}; letter-spacing: 0.8px; white-space: nowrap;">
-                                {n['type']}
+                                {status_tag} | {n['type']}
                             </span>
                             <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; white-space: nowrap;">
                                 🕒 {n['time']}
@@ -3112,10 +3178,11 @@ with tab_tactical:
     </div>
     """, unsafe_allow_html=True)
 
-    # Calcular exposición USD actual
+    # Búsqueda robusta de la exposición USD actual calculada estrictamente sobre el PORTAFOLIO LÍQUIDO E INVERSIONES (Excluyendo Propiedad Raíz)
     usd_classes = ["Acciones EEUU", "Commodities (Oro)", "Liquidez USD", "Criptomonedas"]
-    val_usd_actual = inventario_actual[inventario_actual["Clase"].isin(usd_classes)]["Total_COP"].sum() if "Total_COP" in inventario_actual.columns else 0.0
-    exp_usd_pct_actual = (val_usd_actual / patrimonio_total * 100) if patrimonio_total > 0 else 0.0
+    filtro_usd = maestro_df[(maestro_df["Moneda"] == "USD") | (maestro_df["Clase"].isin(usd_classes))]
+    val_usd_actual = float(filtro_usd["Total_COP"].sum()) if not filtro_usd.empty else 0.0
+    exp_usd_pct_actual = (val_usd_actual / patrimonio_liquido * 100.0) if patrimonio_liquido > 0 else 0.0
     
     target_usd_pct = exp_usd_pct_actual
     monto_traslado_custom = 0.0
@@ -3141,13 +3208,21 @@ with tab_tactical:
     with c_step1_der:
         if "Dólares" in tipo_meta:
             target_usd_pct = st.slider(
-                "Objetivo de Exposición en USD (% del AUM):",
-                min_value=10, max_value=80, value=max(40, int(exp_usd_pct_actual + 15)), step=5,
+                "Objetivo de Exposición en USD (% del Portafolio Líquido):",
+                min_value=10, max_value=80, value=max(20, int(exp_usd_pct_actual + 10)), step=5,
                 key="target_usd_slider_v3"
             )
-            val_usd_target = patrimonio_total * (target_usd_pct / 100.0)
+            val_usd_target = patrimonio_liquido * (target_usd_pct / 100.0)
             monto_faltante_comprar = max(0.0, val_usd_target - val_usd_actual)
-            st.info(f"💡 Exposición USD Actual: **{exp_usd_pct_actual:.1f}%** (${val_usd_actual:,.0f} COP)\n\n🎯 Meta Deseada: **{target_usd_pct:.1f}%** (${val_usd_target:,.0f} COP)\n\n🛒 **Faltante por Adquirir (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${(monto_faltante_comprar/trm_dia):,.2f} USD**)")
+            usd_faltante = (monto_faltante_comprar / trm_dia) if trm_dia > 0 else 0.0
+            usd_actual_equiv = (val_usd_actual / trm_dia) if trm_dia > 0 else 0.0
+            usd_target_equiv = (val_usd_target / trm_dia) if trm_dia > 0 else 0.0
+            
+            st.info(
+                f"💡 **Exposición USD Actual (Portafolio Líquido):** {exp_usd_pct_actual:.1f}% (${val_usd_actual:,.0f} COP | ~${usd_actual_equiv:,.2f} USD)\n\n"
+                f"🎯 **Meta Deseada:** {target_usd_pct:.1f}% (${val_usd_target:,.0f} COP | ~${usd_target_equiv:,.2f} USD)\n\n"
+                f"🛒 **Faltante por Adquirir (Gap Real):** ${monto_faltante_comprar:,.0f} COP (~${usd_faltante:,.2f} USD)"
+            )
         elif "Riesgo" in tipo_meta:
             target_risk_red = st.slider("Porcentaje a trasladar de activos volátiles a Liquidez:", 5, 50, 20, step=5, key="risk_red_slider_v3")
             st.info(f"💡 Trasladarás el **{target_risk_red}%** de tus activos volátiles hacia Liquidez COP/USD para estabilizar el riesgo.")
@@ -3198,42 +3273,42 @@ with tab_tactical:
                         key="monto_custom_num_v4"
                     )
                     monto_target_total = monto_traslado_custom
-                    pct_target_total = (monto_target_total / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                    pct_target_total = (monto_target_total / patrimonio_liquido * 100.0) if patrimonio_liquido > 0 else 0.0
                 else:
                     target_pct_asset = st.slider(
-                        "Porcentaje TARGET deseado para este activo (% del AUM):",
-                        min_value=0.0, max_value=60.0, value=max(5.0, round((saldo_actual_activo/patrimonio_total*100.0), 1) if patrimonio_total > 0 else 5.0), step=0.5,
+                        "Porcentaje TARGET deseado para este activo (% del Portafolio Líquido):",
+                        min_value=0.0, max_value=60.0, value=max(5.0, round((saldo_actual_activo/patrimonio_liquido*100.0), 1) if patrimonio_liquido > 0 else 5.0), step=0.5,
                         key="target_pct_asset_slider_v4"
                     )
                     pct_target_total = target_pct_asset
-                    monto_target_total = patrimonio_total * (target_pct_asset / 100.0)
+                    monto_target_total = patrimonio_liquido * (target_pct_asset / 100.0)
                     
                 diferencia_gap = monto_target_total - saldo_actual_activo
-                pct_actual_activo = (saldo_actual_activo / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                pct_actual_activo = (saldo_actual_activo / patrimonio_liquido * 100.0) if patrimonio_liquido > 0 else 0.0
                 
                 usd_target = (monto_target_total / trm_dia) if trm_dia > 0 else 0.0
                 usd_actual = (saldo_actual_activo / trm_dia) if trm_dia > 0 else 0.0
                 
                 if diferencia_gap > 0:
                     monto_faltante_comprar = diferencia_gap
-                    pct_faltante_activo = (monto_faltante_comprar / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                    pct_faltante_activo = (monto_faltante_comprar / patrimonio_liquido * 100.0) if patrimonio_liquido > 0 else 0.0
                     usd_faltante = (monto_faltante_comprar / trm_dia) if trm_dia > 0 else 0.0
                     
                     st.info(
-                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP (~${usd_target:,.2f} USD | {pct_target_total:.1f}% AUM)\n\n"
-                        f"💼 **Saldo Actual Poseído en Portafolio:** ${saldo_actual_activo:,.0f} COP (~${usd_actual:,.2f} USD | {pct_actual_activo:.1f}% AUM)\n\n"
-                        f"🛒 **Monto Faltante por Comprar (Gap Real):** **${monto_faltante_comprar:,.0f} COP** (~**${usd_faltante:,.2f} USD** | **+{pct_faltante_activo:.1f}% AUM**)"
+                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP (~${usd_target:,.2f} USD | {pct_target_total:.1f}% AUM Líquido)\n\n"
+                        f"💼 **Saldo Actual Poseído en Portafolio:** ${saldo_actual_activo:,.0f} COP (~${usd_actual:,.2f} USD | {pct_actual_activo:.1f}% AUM Líquido)\n\n"
+                        f"🛒 **Monto Faltante por Comprar (Gap Real):** ${monto_faltante_comprar:,.0f} COP (~${usd_faltante:,.2f} USD | +{pct_faltante_activo:.1f}% AUM Líquido)"
                     )
                 elif diferencia_gap < 0:
                     monto_excedente_vender = abs(diferencia_gap)
                     monto_faltante_comprar = 0.0
-                    pct_excedente = (monto_excedente_vender / patrimonio_total * 100.0) if patrimonio_total > 0 else 0.0
+                    pct_excedente = (monto_excedente_vender / patrimonio_liquido * 100.0) if patrimonio_liquido > 0 else 0.0
                     usd_excedente = (monto_excedente_vender / trm_dia) if trm_dia > 0 else 0.0
                     
                     st.warning(
-                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP (~${usd_target:,.2f} USD | {pct_target_total:.1f}% AUM)\n\n"
-                        f"💼 **Saldo Actual Poseído en Portafolio:** ${saldo_actual_activo:,.0f} COP (~${usd_actual:,.2f} USD | {pct_actual_activo:.1f}% AUM)\n\n"
-                        f"🔻 **Excedente a Reducir / Vender:** **${monto_excedente_vender:,.0f} COP** (~**${usd_excedente:,.2f} USD** | **-{pct_excedente:.1f}% AUM**)"
+                        f"🎯 **Meta Target Total ({activo_destino_custom}):** ${monto_target_total:,.0f} COP (~${usd_target:,.2f} USD | {pct_target_total:.1f}% AUM Líquido)\n\n"
+                        f"💼 **Saldo Actual Poseído en Portafolio:** ${saldo_actual_activo:,.0f} COP (~${usd_actual:,.2f} USD | {pct_actual_activo:.1f}% AUM Líquido)\n\n"
+                        f"🔻 **Excedente a Reducir / Vender:** ${monto_excedente_vender:,.0f} COP (~${usd_excedente:,.2f} USD | -{pct_excedente:.1f}% AUM Líquido)"
                     )
                 else:
                     monto_faltante_comprar = 0.0
@@ -3309,10 +3384,11 @@ with tab_tactical:
                 st.success("✅ Tu portafolio ya se encuentra perfectamente alineado con la meta seleccionada (Diferencia menor a $5M COP).")
             else:
                 if diferencia_cop > 0:
-                    st.markdown(f"**Resumen de la Meta:** Adquirir **${diferencia_cop:,.0f} COP** (~**${(diferencia_cop/trm_dia):,.2f} USD**) en activos de divisa dura para alcanzar la meta de **{target_usd_pct:.1f}% USD**.")
+                    diferencia_usd = (diferencia_cop / trm_dia) if trm_dia > 0 else 0.0
+                    st.markdown(f"**Resumen de la Meta:** Adquirir **${diferencia_cop:,.0f} COP** (~**${diferencia_usd:,.2f} USD**) en activos de divisa dura para alcanzar la meta de **{target_usd_pct:.1f}% USD**.")
                     
                     cop_classes = ["Liquidez COP", "Fondos de Inversión", "Acciones Colombia"]
-                    inv_cop = inventario_actual[inventario_actual["Clase"].isin(cop_classes)].copy()
+                    inv_cop = maestro_df[maestro_df["Clase"].isin(cop_classes)].copy()
                     inv_cop["Prioridad"] = inv_cop["Clase"].map({"Liquidez COP": 1, "Fondos de Inversión": 2, "Acciones Colombia": 3})
                     inv_cop = inv_cop.sort_values("Prioridad")
                     
@@ -3342,7 +3418,8 @@ with tab_tactical:
                         st.dataframe(pd.DataFrame(plan_filas), use_container_width=True, hide_index=True)
                 else:
                     monto_reducir = abs(diferencia_cop)
-                    st.markdown(f"**Resumen de la Meta:** Reducir **${monto_reducir:,.0f} COP** (~**${(monto_reducir/trm_dia):,.2f} USD**) recortando posición en dólares al **{target_usd_pct:.1f}%**.")
+                    monto_reducir_usd = (monto_reducir / trm_dia) if trm_dia > 0 else 0.0
+                    st.markdown(f"**Resumen de la Meta:** Reducir **${monto_reducir:,.0f} COP** (~**${monto_reducir_usd:,.2f} USD**) recortando posición en dólares al **{target_usd_pct:.1f}%**.")
                     st.info("Sugerencia Táctica: Rebalancear vendiendo parte de Liquidez USD o Acciones EEUU de mayor ganancia acumulada y trasladar hacia Fondos de Inversión en COP.")
 
     # -------------------------------------------------------------------------
@@ -3352,14 +3429,14 @@ with tab_tactical:
     st.markdown("<p style='font-size:14px; font-weight:800; color:#FFFFFF; margin-bottom:10px; letter-spacing:0.5px;'>PASO 3 ➔ CENTRO DE SIMULACIÓN PRO-FORMA & ANÁLISIS DE IMPACTO EN EL PORTAFOLIO</p>", unsafe_allow_html=True)
     
     usd_exp_antes = exp_usd_pct_actual
-    usd_exp_despues = (target_usd_pct if not es_modo_especifico else (usd_exp_antes + (monto_faltante_comprar / patrimonio_total * 100) if "Cripto" in clase_destino_custom or "EEUU" in clase_destino_custom or "Oro" in clase_destino_custom else usd_exp_antes))
+    usd_exp_despues = (target_usd_pct if not es_modo_especifico else (usd_exp_antes + (monto_faltante_comprar / patrimonio_liquido * 100) if "Cripto" in clase_destino_custom or "EEUU" in clase_destino_custom or "Oro" in clase_destino_custom else usd_exp_antes))
     
     # 1. Gráficos de Dona Duales por Categorías de Activos (Side-by-Side High Contrast Asset Donut Charts)
-    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-bottom:8px;'>A. DISTRIBUCIÓN POR CLASE DE ACTIVO (ANTES VS. DESPUÉS REBALANCEADO)</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-bottom:8px;'>A. DISTRIBUCIÓN POR CLASE DE ACTIVO LÍQUIDO (ANTES VS. DESPUÉS REBALANCEADO)</p>", unsafe_allow_html=True)
     col_dona1, col_dona2 = st.columns(2)
     
-    # Agrupar inventario actual por Clase
-    df_clases_antes = inventario_actual.groupby("Clase")["Total_COP"].sum().reset_index() if "Total_COP" in inventario_actual.columns else pd.DataFrame([{"Clase": "Fondos de Inversión", "Total_COP": patrimonio_total}])
+    # Agrupar inventario maestro actual por Clase (Excluyendo Propiedad Raíz)
+    df_clases_antes = maestro_df[maestro_df["Clase"] != "Propiedad Raíz"].groupby("Clase")["Total_COP"].sum().reset_index()
     
     # Crear distribución pro-forma simulada
     df_clases_despues = df_clases_antes.copy()
@@ -3383,7 +3460,7 @@ with tab_tactical:
     with col_dona1:
         fig_d1 = px.pie(df_clases_antes, values="Total_COP", names="Clase", hole=0.45, color_discrete_sequence=palette_colors)
         fig_d1.update_layout(
-            title=dict(text="<b>Composición Actual (Antes)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
+            title=dict(text="<b>Composición Líquida Actual (Antes)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#FFFFFF", family="Inter, sans-serif"),
@@ -3397,7 +3474,7 @@ with tab_tactical:
     with col_dona2:
         fig_d2 = px.pie(df_clases_despues, values="Total_COP", names="Clase", hole=0.45, color_discrete_sequence=palette_colors)
         fig_d2.update_layout(
-            title=dict(text="<b>Composición Pro-Forma (Después)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
+            title=dict(text="<b>Composición Líquida Pro-Forma (Después)</b>", font=dict(color="#FFFFFF", size=14, family="Inter, sans-serif")),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#FFFFFF", family="Inter, sans-serif"),
@@ -3447,7 +3524,7 @@ with tab_tactical:
         # Escenarios dinámicos porcentuales respecto a la TRM spot del día (-10% Caída / Spot Mercado / +10% Subida)
         trm_baja = trm_dia * 0.90
         trm_alta = trm_dia * 1.10
-        val_usd_sim = patrimonio_total * (usd_exp_despues / 100.0)
+        val_usd_sim = patrimonio_liquido * (usd_exp_despues / 100.0)
         
         delta_trm_baja = trm_baja - trm_dia  # Negativo (-10%)
         delta_trm_alta = trm_alta - trm_dia  # Positivo (+10%)
