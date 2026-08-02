@@ -3551,19 +3551,52 @@ with tab_tactical:
             height=310
         )
         
-    # 2. Resumen Ejecutivo de Métricas Financieras Pro-Forma (KPI Cards con Explicaciones)
+    # 2. Resumen Ejecutivo de Métricas Financieras Pro-Forma (Cálculo Dinámico en Tiempo Real)
     st.markdown("<p style='font-size:12.5px; font-weight:700; color:#FFFFFF; margin-top:16px; margin-bottom:8px;'>B. RESUMEN EJECUTIVO DE MÉTRICAS PRO-FORMA & PERFIL DE RIESGO</p>", unsafe_allow_html=True)
     
-    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+    # Parámetros de Mercado por Clase de Activo (Capital Market Assumptions)
+    cma_ret = {
+        "Criptomonedas": 42.0,
+        "Acciones EEUU": 12.5,
+        "Acciones Colombia": 14.5,
+        "Commodities (Oro)": 9.0,
+        "Fondos de Inversión": 10.2,
+        "Liquidez USD": 5.0,
+        "Liquidez COP": 9.5
+    }
+    cma_vol = {
+        "Criptomonedas": 52.0,
+        "Acciones EEUU": 16.0,
+        "Acciones Colombia": 19.0,
+        "Commodities (Oro)": 13.5,
+        "Fondos de Inversión": 5.5,
+        "Liquidez USD": 8.0,
+        "Liquidez COP": 1.5
+    }
     
-    vol_antes = 12.4
-    vol_despues = max(8.5, vol_antes * (1.0 + (0.04 if "BTC" in activo_destino_custom or "Cripto" in clase_destino_custom else -0.03)))
+    # Retornos esperados ponderados (Antes vs Después)
+    ret_antes_pct = float(sum((r["Pct_Antes"] / 100.0) * cma_ret.get(r["Clase"], 10.0) for _, r in df_clases_despues.iterrows()))
+    ret_despues_pct = float(sum((r["Pct_Despues"] / 100.0) * cma_ret.get(r["Clase"], 10.0) for _, r in df_clases_despues.iterrows()))
     
-    ret_antes_pct = 10.5
-    ret_despues_pct = 14.2 if "BTC" in activo_destino_custom or "Cripto" in clase_destino_custom else 11.8
+    # Volatilidad ponderada con covarianza inter-activo (Correlación promedio rho = 0.30)
+    vol_var_antes = sum(((r["Pct_Antes"] / 100.0) * cma_vol.get(r["Clase"], 12.0)) ** 2 for _, r in df_clases_despues.iterrows())
+    vol_cov_antes = sum(
+        (r1["Pct_Antes"] / 100.0) * cma_vol.get(r1["Clase"], 12.0) * (r2["Pct_Antes"] / 100.0) * cma_vol.get(r2["Clase"], 12.0) * 0.30
+        for i1, r1 in df_clases_despues.iterrows() for i2, r2 in df_clases_despues.iterrows() if i1 < i2
+    )
+    vol_antes = max(3.0, float((vol_var_antes + 2 * vol_cov_antes) ** 0.5))
     
-    sharpe_antes = (ret_antes_pct - 5.0) / vol_antes
-    sharpe_despues = (ret_despues_pct - 5.0) / vol_despues
+    vol_var_desp = sum(((r["Pct_Despues"] / 100.0) * cma_vol.get(r["Clase"], 12.0)) ** 2 for _, r in df_clases_despues.iterrows())
+    vol_cov_desp = sum(
+        (r1["Pct_Despues"] / 100.0) * cma_vol.get(r1["Clase"], 12.0) * (r2["Pct_Despues"] / 100.0) * cma_vol.get(r2["Clase"], 12.0) * 0.30
+        for i1, r1 in df_clases_despues.iterrows() for i2, r2 in df_clases_despues.iterrows() if i1 < i2
+    )
+    vol_despues = max(3.0, float((vol_var_desp + 2 * vol_cov_desp) ** 0.5))
+    
+    # Tasa libre de riesgo (Rf = 5.0%) y Ratio de Sharpe
+    rf = 5.0
+    sharpe_antes = (ret_antes_pct - rf) / vol_antes if vol_antes > 0 else 0.0
+    sharpe_despues = (ret_despues_pct - rf) / vol_despues if vol_despues > 0 else 0.0
     
     # VaR 95% Paramétrico Anual exacto sobre el Portafolio Líquido (Z = 1.645)
     var_pct_antes = max(1.0, (1.645 * vol_antes) - ret_antes_pct)
@@ -3571,6 +3604,8 @@ with tab_tactical:
     
     var_95_antes = patrimonio_liquido * (var_pct_antes / 100.0)
     var_95_despues = patrimonio_liquido * (var_pct_despues / 100.0)
+    
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
     
     with col_kpi1:
         st.metric("Retorno Proyectado (CAGR)", f"{ret_despues_pct:.1f}%", f"{ret_despues_pct - ret_antes_pct:+.1f}% vs Actual")
